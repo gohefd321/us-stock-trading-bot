@@ -8,7 +8,7 @@ from pathlib import Path
 
 
 # Get project root directory (2 levels up from this file)
-PROJECT_ROOT = Path(__file__).parent.parent.parent
+PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
 
 class Settings(BaseSettings):

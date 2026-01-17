@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 
 
 # Get project root directory (3 levels up from this file)
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 def setup_logging(log_level: str = "INFO"):

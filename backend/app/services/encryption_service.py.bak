@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 # Get project root directory (3 levels up from this file)
-PROJECT_ROOT = Path(__file__).parent.parent.parent.parent.resolve()
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 
 
 class EncryptionService:
