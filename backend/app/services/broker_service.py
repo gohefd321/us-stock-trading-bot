@@ -29,6 +29,13 @@ class BrokerService:
         self.api_secret = settings.korea_investment_api_secret
         self.account_number = settings.korea_investment_account_number
         self.is_paper = settings.korea_investment_paper_mode
+        self.broker = None
+
+        # Only initialize broker if credentials are provided
+        if not self.api_key or not self.api_secret or not self.account_number:
+            logger.warning("Korea Investment API credentials not configured. Broker service will be unavailable.")
+            logger.warning("Please configure API keys in .env file or via WebUI settings.")
+            return
 
         # Initialize Mojito broker
         try:
@@ -41,7 +48,7 @@ class BrokerService:
             logger.info(f"Broker initialized (paper_mode={self.is_paper})")
         except Exception as e:
             logger.error(f"Failed to initialize broker: {e}")
-            raise
+            logger.warning("Broker service will be unavailable. Please check your API credentials.")
 
     async def get_balance(self) -> Dict:
         """
@@ -50,6 +57,10 @@ class BrokerService:
         Returns:
             Dictionary with balance information
         """
+        if not self.broker:
+            logger.error("Broker not initialized. Cannot fetch balance.")
+            raise RuntimeError("Broker service not initialized. Please configure API credentials.")
+
         try:
             # Run in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
@@ -86,6 +97,10 @@ class BrokerService:
         Returns:
             Current price or None if failed
         """
+        if not self.broker:
+            logger.error("Broker not initialized. Cannot fetch price.")
+            return None
+
         try:
             loop = asyncio.get_event_loop()
             price_data = await loop.run_in_executor(
