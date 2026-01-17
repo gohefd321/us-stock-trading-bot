@@ -47,5 +47,13 @@ async def get_db() -> AsyncSession:
 
 async def init_db():
     """Initialize database (create tables)"""
+    # Import at function level to avoid circular dependency
+    from pathlib import Path
+
+    # Extract database file path and create parent directory
+    db_url = DATABASE_URL.replace('sqlite+aiosqlite:///', '')
+    db_path = Path(db_url)
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
