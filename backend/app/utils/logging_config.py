@@ -8,6 +8,10 @@ from pathlib import Path
 from logging.handlers import RotatingFileHandler
 
 
+# Get project root directory (3 levels up from this file)
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+
+
 def setup_logging(log_level: str = "INFO"):
     """
     Setup logging configuration
@@ -15,8 +19,8 @@ def setup_logging(log_level: str = "INFO"):
     Args:
         log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
     """
-    # Create logs directory if it doesn't exist
-    log_dir = Path("logs")
+    # Create logs directory if it doesn't exist (in project root)
+    log_dir = PROJECT_ROOT / "logs"
     log_dir.mkdir(exist_ok=True)
 
     # Convert log level string to logging constant

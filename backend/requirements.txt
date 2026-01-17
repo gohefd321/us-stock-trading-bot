@@ -11,7 +11,7 @@ aiosqlite==0.20.0
 cryptography==43.0.3
 
 # Korea Investment Securities API
-mojito2==0.1.71
+mojito2==0.1.6
 
 # Market Data & Signal Sources
 yfinance==0.2.48

@@ -8,16 +8,22 @@ import os
 from pathlib import Path
 
 
+# Get project root directory (3 levels up from this file)
+PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+
+
 class EncryptionService:
     """Service for encrypting and decrypting API keys"""
 
-    def __init__(self, key_file: str = "data/encryption.key"):
+    def __init__(self, key_file: str = None):
         """
         Initialize encryption service
 
         Args:
-            key_file: Path to encryption key file
+            key_file: Path to encryption key file (defaults to PROJECT_ROOT/data/encryption.key)
         """
+        if key_file is None:
+            key_file = str(PROJECT_ROOT / "data" / "encryption.key")
         self.key_file = key_file
         self.key = self._load_or_generate_key()
         self.cipher = Fernet(self.key)
