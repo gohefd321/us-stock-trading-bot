@@ -144,6 +144,14 @@ class BrokerService:
         Returns:
             Order result dictionary
         """
+        if not self.broker:
+            logger.error("Broker not initialized. Cannot place order.")
+            return {
+                'success': False,
+                'error': 'Broker service not initialized. Please configure API credentials.',
+                'timestamp': datetime.now().isoformat()
+            }
+
         try:
             logger.info(f"Placing order: {action} {quantity} {ticker} ({order_type})")
 
@@ -213,6 +221,10 @@ class BrokerService:
         Returns:
             List of position dictionaries
         """
+        if not self.broker:
+            logger.error("Broker not initialized. Cannot fetch positions.")
+            return []
+
         try:
             loop = asyncio.get_event_loop()
             positions_data = await loop.run_in_executor(
@@ -262,6 +274,10 @@ class BrokerService:
         Returns:
             Order status dictionary or None if not found
         """
+        if not self.broker:
+            logger.error("Broker not initialized. Cannot fetch order status.")
+            return None
+
         try:
             loop = asyncio.get_event_loop()
             orders_data = await loop.run_in_executor(
@@ -297,6 +313,10 @@ class BrokerService:
         Returns:
             True if cancelled successfully
         """
+        if not self.broker:
+            logger.error("Broker not initialized. Cannot cancel order.")
+            return False
+
         try:
             loop = asyncio.get_event_loop()
             result = await loop.run_in_executor(
@@ -318,17 +338,5 @@ class BrokerService:
             return False
 
 
-# Global broker instance
-_broker_service: Optional[BrokerService] = None
-
-
-def initialize_broker_service(api_key: str, api_secret: str, account_number: str, is_paper: bool = False):
-    """Initialize global broker service"""
-    global _broker_service
-    _broker_service = BrokerService(api_key, api_secret, account_number, is_paper)
-    logger.info("Global broker service initialized")
-
-
-def get_broker_service() -> Optional[BrokerService]:
-    """Get global broker service instance"""
-    return _broker_service
+# Note: Global broker instance initialization is now handled by dependencies.py
+# These functions are kept for backward compatibility but are deprecated
