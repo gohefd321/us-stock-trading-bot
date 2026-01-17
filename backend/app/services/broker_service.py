@@ -15,30 +15,30 @@ logger = logging.getLogger(__name__)
 class BrokerService:
     """Service for interacting with Korea Investment Securities API"""
 
-    def __init__(self, api_key: str, api_secret: str, account_number: str, is_paper: bool = False):
+    def __init__(self, settings):
         """
         Initialize broker service
 
         Args:
-            api_key: API key
-            api_secret: API secret
-            account_number: Account number
-            is_paper: Use paper trading (simulation) mode
+            settings: Application settings with API credentials
         """
-        self.api_key = api_key
-        self.api_secret = api_secret
-        self.account_number = account_number
-        self.is_paper = is_paper
+        # Import here to avoid circular dependency
+        from ..config import Settings
+
+        self.api_key = settings.korea_investment_api_key
+        self.api_secret = settings.korea_investment_api_secret
+        self.account_number = settings.korea_investment_account_number
+        self.is_paper = settings.korea_investment_paper_mode
 
         # Initialize Mojito broker
         try:
             self.broker = mojito.KoreaInvestment(
-                api_key=api_key,
-                api_secret=api_secret,
-                acc_no=account_number,
-                mock=is_paper
+                api_key=self.api_key,
+                api_secret=self.api_secret,
+                acc_no=self.account_number,
+                mock=self.is_paper
             )
-            logger.info(f"Broker initialized (paper_mode={is_paper})")
+            logger.info(f"Broker initialized (paper_mode={self.is_paper})")
         except Exception as e:
             logger.error(f"Failed to initialize broker: {e}")
             raise
