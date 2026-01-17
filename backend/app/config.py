@@ -3,7 +3,7 @@ Configuration Management
 """
 
 from pydantic_settings import BaseSettings
-from typing import Optional
+from typing import Optional, List
 from pathlib import Path
 
 
@@ -39,8 +39,13 @@ class Settings(BaseSettings):
     daily_loss_limit_pct: int = 20
     stop_loss_pct: int = 30
 
-    # CORS Origins
-    cors_origins: list = ["http://localhost:5173", "http://localhost:3000"]
+    # CORS Origins (comma-separated string from env, converted to list)
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Convert CORS origins string to list"""
+        return [origin.strip() for origin in self.cors_origins.split(",")]
 
     class Config:
         env_file = str(PROJECT_ROOT / ".env")
