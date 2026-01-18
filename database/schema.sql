@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     key_name TEXT NOT NULL UNIQUE,  -- 'korea_investment_key', 'korea_investment_secret', etc.
     encrypted_value TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT 1 NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
