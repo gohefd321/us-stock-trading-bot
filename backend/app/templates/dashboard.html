@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}대시보드 - US Stock Trading Bot{% endblock %}
+
+{% block content %}
+<h1>대시보드</h1>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if warning %}
+<div class="alert alert-warning">{{ warning }}</div>
+{% endif %}
+
+<!-- 스케줄러 제어 -->
+<div class="card">
+    <div class="flex">
+        <div>
+            <h2>자동 거래 스케줄러</h2>
+            <span class="badge {% if scheduler.is_running %}badge-success{% else %}badge-default{% endif %}">
+                {% if scheduler.is_running %}실행 중{% else %}중지됨{% endif %}
+            </span>
+            <p style="margin-top: 0.5rem; color: #666;">예정된 작업: {{ scheduler.job_count }}개</p>
+        </div>
+        <div>
+            {% if scheduler.is_running %}
+            <form method="post" action="/scheduler/stop" style="display: inline;">
+                <button type="submit" class="danger">중지</button>
+            </form>
+            {% else %}
+            <form method="post" action="/scheduler/start" style="display: inline;">
+                <button type="submit" class="success">시작</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- 포트폴리오 요약 -->
+<div class="grid">
+    <div class="stat-card">
+        <h3>총 자산</h3>
+        <div class="value">₩{{ "{:,}".format(portfolio.total_value|int) }}</div>
+    </div>
+    <div class="stat-card">
+        <h3>현금 잔고</h3>
+        <div class="value">₩{{ "{:,}".format(portfolio.cash_balance|int) }}</div>
+    </div>
+    <div class="stat-card">
+        <h3>일일 손익</h3>
+        <div class="value {% if portfolio.daily_pnl_pct >= 0 %}positive{% else %}negative{% endif %}">
+            {{ "+" if portfolio.daily_pnl_pct >= 0 else "" }}{{ "%.2f"|format(portfolio.daily_pnl_pct) }}%
+        </div>
+        <small>₩{{ "{:,}".format(portfolio.daily_pnl|int) }}</small>
+    </div>
+    <div class="stat-card">
+        <h3>총 손익</h3>
+        <div class="value {% if portfolio.total_pnl_pct >= 0 %}positive{% else %}negative{% endif %}">
+            {{ "+" if portfolio.total_pnl_pct >= 0 else "" }}{{ "%.2f"|format(portfolio.total_pnl_pct) }}%
+        </div>
+        <small>₩{{ "{:,}".format(portfolio.total_pnl|int) }}</small>
+    </div>
+</div>
+
+<!-- 위험 경고 -->
+{% if portfolio.daily_pnl_pct <= -15 %}
+<div class="alert alert-warning">
+    ⚠️ 일일 손실률이 -15%를 초과했습니다. -20%에 도달하면 서킷브레이커가 발동됩니다.
+</div>
+{% endif %}
+
+<!-- 보유 포지션 -->
+<div class="card">
+    <h2>보유 포지션 ({{ portfolio.position_count }}개)</h2>
+    {% if portfolio.positions %}
+    <table>
+        <thead>
+            <tr>
+                <th>종목</th>
+                <th>수량</th>
+                <th>평단가</th>
+                <th>현재가</th>
+                <th>평가액</th>
+                <th>손익률</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for pos in portfolio.positions %}
+            <tr>
+                <td><strong>{{ pos.ticker }}</strong></td>
+                <td>{{ pos.quantity }}주</td>
+                <td>${{ "%.2f"|format(pos.avg_cost) }}</td>
+                <td>${{ "%.2f"|format(pos.current_price) }}</td>
+                <td>₩{{ "{:,}".format(pos.total_value|int) }}</td>
+                <td class="{% if pos.unrealized_pnl_pct >= 0 %}positive{% else %}negative{% endif %}">
+                    {{ "+" if pos.unrealized_pnl_pct >= 0 else "" }}{{ "%.2f"|format(pos.unrealized_pnl_pct) }}%
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #666;">보유 중인 포지션이 없습니다.</p>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 30초마다 자동 새로고침
+    setTimeout(() => location.reload(), 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}설정 - US Stock Trading Bot{% endblock %}
+
+{% block content %}
+<h1>설정</h1>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+{% if success %}
+<div class="alert alert-success">{{ success }}</div>
+{% endif %}
+
+<!-- API 키 설정 -->
+<div class="card">
+    <h2>🔑 API 키 관리</h2>
+
+    <form method="post" action="/settings/save-keys" style="margin-bottom: 2rem;">
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">App Key</label>
+            <input type="text" name="app_key" value="{{ api_keys.get('app_key', '') }}" placeholder="한국투자증권 App Key 입력" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">App Secret</label>
+            <input type="password" name="app_secret" value="{{ api_keys.get('app_secret', '') }}" placeholder="한국투자증권 App Secret 입력" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">계좌번호</label>
+            <input type="text" name="account_number" value="{{ api_keys.get('account_number', '') }}" placeholder="계좌번호 입력 (예: 12345678-01)" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">형식: 12345678-01</small>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" name="paper_mode" value="true" {% if paper_mode %}checked{% endif %} style="margin-right: 0.5rem;">
+                <span>모의 투자 모드 (Paper Trading)</span>
+            </label>
+        </div>
+
+        <button type="submit" class="success">저장</button>
+    </form>
+
+    {% if api_keys %}
+    <div style="padding: 1rem; background: #f8f9fa; border-radius: 4px; margin-top: 1rem;">
+        <h3 style="margin-top: 0; font-size: 0.95rem; color: #666;">현재 설정된 API 키</h3>
+        <ul style="margin: 0; padding-left: 1.5rem;">
+            {% if api_keys.get('app_key') %}
+            <li>App Key: {{ api_keys.get('app_key')[:8] }}... ✓</li>
+            {% endif %}
+            {% if api_keys.get('app_secret') %}
+            <li>App Secret: ********** ✓</li>
+            {% endif %}
+            {% if api_keys.get('account_number') %}
+            <li>계좌번호: {{ api_keys.get('account_number') }} ✓</li>
+            {% endif %}
+        </ul>
+    </div>
+    {% else %}
+    <div style="padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; margin-top: 1rem;">
+        <p style="margin: 0; color: #856404;">⚠️ API 키가 설정되지 않았습니다. 거래를 시작하려면 위 양식을 작성해주세요.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- 리스크 파라미터 -->
+<div class="card">
+    <h2>⚙️ 리스크 파라미터</h2>
+
+    <form method="post" action="/settings/save-risk-params">
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">최대 포지션 수</label>
+            <input type="number" name="max_positions" value="{{ risk_params.max_positions }}" min="1" max="20" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">동시에 보유할 수 있는 최대 종목 수</small>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">포지션당 최대 비중 (%)</label>
+            <input type="number" name="max_position_size_pct" value="{{ risk_params.max_position_size_pct }}" min="1" max="100" step="0.1" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">전체 자산 대비 한 종목의 최대 비중</small>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">손절 기준 (%)</label>
+            <input type="number" name="stop_loss_pct" value="{{ risk_params.stop_loss_pct }}" min="1" max="50" step="0.1" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">매수가 대비 손실 시 자동 매도 기준</small>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">익절 기준 (%)</label>
+            <input type="number" name="take_profit_pct" value="{{ risk_params.take_profit_pct }}" min="1" max="200" step="0.1" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">매수가 대비 이익 시 자동 매도 기준</small>
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">일일 최대 손실률 (서킷브레이커) (%)</label>
+            <input type="number" name="daily_loss_limit_pct" value="{{ risk_params.daily_loss_limit_pct }}" min="1" max="50" step="0.1" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">일일 손실이 이 비율 초과 시 모든 거래 중단</small>
+        </div>
+
+        <button type="submit" class="success">저장</button>
+    </form>
+</div>
+
+<!-- 시스템 정보 -->
+<div class="card">
+    <h2>ℹ️ 시스템 정보</h2>
+    <table>
+        <tbody>
+            <tr>
+                <td><strong>버전</strong></td>
+                <td>1.0.0</td>
+            </tr>
+            <tr>
+                <td><strong>데이터베이스</strong></td>
+                <td>SQLite</td>
+            </tr>
+            <tr>
+                <td><strong>브로커</strong></td>
+                <td>한국투자증권</td>
+            </tr>
+            <tr>
+                <td><strong>운영 모드</strong></td>
+                <td>{% if paper_mode %}모의 투자{% else %}실전 투자{% endif %}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 폼 제출 시 확인
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', (e) => {
+            const btn = form.querySelector('button[type="submit"]');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '저장 중...';
+            }
+        });
+    });
+</script>
+{% endblock %}

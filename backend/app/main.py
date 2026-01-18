@@ -19,6 +19,7 @@ from .routes import (
     signals_router,
     settings_router
 )
+from .routes.web import router as web_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -41,6 +42,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(web_router)  # Web UI routes (HTML templates)
 app.include_router(scheduler_router)
 app.include_router(trading_router)
 app.include_router(portfolio_router)
@@ -81,14 +83,7 @@ async def shutdown_event():
     logger.info("Application shutdown complete")
 
 
-@app.get("/")
-async def root():
-    """Root endpoint - health check"""
-    return {
-        "message": "US Stock Trading Bot API",
-        "version": settings.app_version,
-        "status": "running"
-    }
+# Root endpoint removed - now handled by web_router
 
 
 @app.get("/health")
