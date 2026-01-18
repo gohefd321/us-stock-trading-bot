@@ -343,7 +343,7 @@ export default function Settings() {
                   startIcon={saving ? <CircularProgress size={20} /> : <SaveIcon />}
                   onClick={() => handleSaveApiKey('REDDIT_CLIENT_SECRET', redditClientSecret)}
                   disabled={!redditClientSecret || saving}
-                />
+                >
                   저장
                 </Button>
               </Box>
