@@ -9,13 +9,16 @@ import type {
   TrendingTicker,
 } from '../types'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// If VITE_API_URL is not set, use relative URLs (works with Cloudflare Tunnel on same domain)
+// If set, use absolute URL (for cross-domain or local development)
+const API_BASE_URL = import.meta.env.VITE_API_URL || ''
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: false, // Set to true if using cookies/sessions
 })
 
 // Scheduler API

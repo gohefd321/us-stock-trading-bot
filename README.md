@@ -51,9 +51,19 @@ bash scripts/run_prod.sh
 
 ### 접속
 
+**로컬 개발:**
 - 백엔드 API: http://localhost:8000
 - API 문서: http://localhost:8000/docs
 - 프론트엔드: http://localhost:5173
+
+**Cloudflare Tunnel 배포:**
+- 모든 서비스: https://your-domain.com
+- 자세한 설정: [CLOUDFLARE_TUNNEL_SETUP.md](CLOUDFLARE_TUNNEL_SETUP.md) 참조
+
+**빠른 Cloudflare Tunnel 설정:**
+```bash
+bash scripts/setup_cloudflare.sh
+```
 
 ## 📁 프로젝트 구조
 

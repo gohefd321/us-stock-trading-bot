@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     log_level: str = "INFO"
     frontend_url: str = "http://localhost:5173"
+    backend_url: str = "http://localhost:8000"  # Backend URL for CORS
 
     # Trading Parameters
     initial_capital_krw: int = 1000000
@@ -41,7 +42,8 @@ class Settings(BaseSettings):
     stop_loss_pct: int = 30
 
     # CORS Origins (comma-separated string from env, converted to list)
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    # Set to "*" to allow all origins, or specify your domain
+    cors_origins: str = "http://localhost:5173,http://localhost:3000,https://stocking.daechanserver.com,http://stocking.daechanserver.com"
 
     @property
     def cors_origins_list(self) -> List[str]:
