@@ -325,8 +325,7 @@ class KISRestAPI:
             "OVRS_EXCG_CD": "NASD",  # 해외거래소코드(NASD:나스닥, NYSE:뉴욕, AMEX:아멕스)
             "TR_CRCY_CD": "USD",  # 거래통화코드
             "CTX_AREA_FK200": "",  # 연속조회검색조건200
-            "CTX_AREA_NK200": "",  # 연속조회키200
-            "ACNT_PWD": self.account_password  # 계좌 비밀번호 (해외주식 필수)
+            "CTX_AREA_NK200": ""  # 연속조회키200
         }
 
         try:
