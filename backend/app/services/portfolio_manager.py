@@ -88,13 +88,24 @@ class PortfolioManager:
             total_value = cash_balance + holdings_value
 
             # Calculate P/L
-            total_pnl = total_value - self.initial_capital
-            total_pnl_pct = (total_pnl / self.initial_capital) * 100 if self.initial_capital > 0 else 0
+            # 초기 자본과 현재 총 자산이 모두 0이면 0%로 표시
+            if self.initial_capital == 0 and total_value == 0:
+                total_pnl = 0
+                total_pnl_pct = 0
+            else:
+                total_pnl = total_value - self.initial_capital
+                total_pnl_pct = (total_pnl / self.initial_capital) * 100 if self.initial_capital > 0 else 0
 
             # Get start of day value for daily P/L
             start_of_day_value = await self._get_start_of_day_value()
-            daily_pnl = total_value - start_of_day_value if start_of_day_value else 0
-            daily_pnl_pct = (daily_pnl / start_of_day_value) * 100 if start_of_day_value > 0 else 0
+
+            # 시작 자산과 현재 자산이 모두 0이면 0%로 표시
+            if start_of_day_value == 0 and total_value == 0:
+                daily_pnl = 0
+                daily_pnl_pct = 0
+            else:
+                daily_pnl = total_value - start_of_day_value if start_of_day_value else 0
+                daily_pnl_pct = (daily_pnl / start_of_day_value) * 100 if start_of_day_value > 0 else 0
 
             state = {
                 'timestamp': datetime.now().isoformat(),
