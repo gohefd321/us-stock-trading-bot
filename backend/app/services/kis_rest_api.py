@@ -344,8 +344,15 @@ class KISRestAPI:
 
             if result.get("rt_cd") == "0":
                 output1 = result.get("output1", [])
-                output2 = result.get("output2", [{}])[0] if result.get("output2") else {}
+                output2_list = result.get("output2", [])
 
+                # output2가 리스트인 경우 첫 번째 요소, 아니면 빈 딕셔너리
+                if isinstance(output2_list, list) and len(output2_list) > 0:
+                    output2 = output2_list[0]
+                else:
+                    output2 = {}
+
+                logger.info(f"output2 type: {type(output2_list)}, length: {len(output2_list) if isinstance(output2_list, list) else 'N/A'}")
                 logger.info(f"output2 data: {output2}")
 
                 # USD 기준 - 한국투자증권 API 문서 기준 필드명
@@ -365,6 +372,8 @@ class KISRestAPI:
                     cash_balance = 0.0
                     total_value = 0.0
                     holdings_value = 0.0
+
+                logger.info(f"✓ Balance parsed successfully: Cash=${cash_balance}, Total=${total_value}, Holdings=${holdings_value}")
 
                 return {
                     "cash_balance": cash_balance,
