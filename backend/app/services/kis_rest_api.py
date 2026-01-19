@@ -43,11 +43,21 @@ class KISRestAPI:
 
         # Parse account number
         if '-' in account_number:
-            self.account_prefix, self.account_suffix = account_number.split('-')
-        else:
+            parts = account_number.split('-')
+            if len(parts) == 2:
+                self.account_prefix, self.account_suffix = parts
+            else:
+                logger.error(f"Invalid account number format: {account_number}")
+                self.account_prefix = ""
+                self.account_suffix = ""
+        elif len(account_number) >= 10:
             # Assume last 2 digits are suffix
             self.account_prefix = account_number[:-2]
             self.account_suffix = account_number[-2:]
+        else:
+            logger.error(f"Invalid account number format: {account_number} (too short)")
+            self.account_prefix = ""
+            self.account_suffix = ""
 
         # Access token
         self.access_token = None
@@ -61,6 +71,7 @@ class KISRestAPI:
         self.token_file = token_dir / f"kis_token_{mode_suffix}.json"
 
         logger.info(f"KIS API initialized (paper_mode={is_paper})")
+        logger.info(f"Account: {self.account_prefix}-{self.account_suffix}")
 
     def _get_headers(self, tr_id: str, content_type: str = "application/json; charset=utf-8") -> Dict:
         """
