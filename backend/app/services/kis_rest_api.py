@@ -9,6 +9,9 @@ import logging
 import hashlib
 import hmac
 import requests
+import json
+import os
+from pathlib import Path
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 import aiohttp
@@ -50,6 +53,13 @@ class KISRestAPI:
         self.access_token = None
         self.token_expired_at = None
 
+        # Token file path (store in data directory)
+        from ..config import PROJECT_ROOT
+        token_dir = PROJECT_ROOT / "data"
+        token_dir.mkdir(exist_ok=True)
+        mode_suffix = "paper" if is_paper else "real"
+        self.token_file = token_dir / f"kis_token_{mode_suffix}.json"
+
         logger.info(f"KIS API initialized (paper_mode={is_paper})")
 
     def _get_headers(self, tr_id: str, content_type: str = "application/json; charset=utf-8") -> Dict:
@@ -72,13 +82,73 @@ class KISRestAPI:
         }
         return headers
 
+    def _load_token_from_file(self) -> bool:
+        """
+        Load access token from file if it exists and is valid
+
+        Returns:
+            True if token was loaded successfully
+        """
+        try:
+            if not self.token_file.exists():
+                return False
+
+            with open(self.token_file, 'r') as f:
+                token_data = json.load(f)
+
+            # Check if token is expired
+            expired_at_str = token_data.get('expired_at')
+            if not expired_at_str:
+                return False
+
+            expired_at = datetime.fromisoformat(expired_at_str)
+
+            # Token should have at least 5 minutes remaining
+            if datetime.now() >= expired_at - timedelta(minutes=5):
+                logger.info("Stored token has expired")
+                return False
+
+            self.access_token = token_data.get('access_token')
+            self.token_expired_at = expired_at
+
+            logger.info(f"✓ Loaded existing token from file (expires: {self.token_expired_at})")
+            return True
+
+        except Exception as e:
+            logger.warning(f"Failed to load token from file: {e}")
+            return False
+
+    def _save_token_to_file(self):
+        """Save access token to file"""
+        try:
+            token_data = {
+                'access_token': self.access_token,
+                'expired_at': self.token_expired_at.isoformat(),
+                'created_at': datetime.now().isoformat()
+            }
+
+            with open(self.token_file, 'w') as f:
+                json.dump(token_data, f, indent=2)
+
+            logger.info(f"✓ Token saved to file: {self.token_file}")
+
+        except Exception as e:
+            logger.error(f"Failed to save token to file: {e}")
+
     def get_access_token(self) -> bool:
         """
-        Get OAuth2 access token
+        Get OAuth2 access token (하루 3회 제한이 있으므로 파일에서 먼저 로드 시도)
 
         Returns:
             True if successful
         """
+        # 먼저 파일에서 토큰 로드 시도
+        if self._load_token_from_file():
+            return True
+
+        # 파일에 없거나 만료되었으면 새로 발급
+        logger.info("Requesting new access token from KIS API...")
+
         url = f"{self.base_url}/oauth2/tokenP"
 
         headers = {
@@ -102,7 +172,11 @@ class KISRestAPI:
                 expires_in = int(result.get("expires_in", 86400))  # Default 24 hours
                 self.token_expired_at = datetime.now() + timedelta(seconds=expires_in)
 
-                logger.info(f"Access token obtained, expires at: {self.token_expired_at}")
+                logger.info(f"✓ New access token obtained, expires at: {self.token_expired_at}")
+
+                # 파일에 저장
+                self._save_token_to_file()
+
                 return True
             else:
                 logger.error(f"Failed to get access token: {result}")
