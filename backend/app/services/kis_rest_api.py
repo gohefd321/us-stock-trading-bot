@@ -26,7 +26,7 @@ class KISRestAPI:
     REAL_BASE_URL = "https://openapi.koreainvestment.com:9443"  # 실전투자
     PAPER_BASE_URL = "https://openapivts.koreainvestment.com:29443"  # 모의투자
 
-    def __init__(self, app_key: str, app_secret: str, account_number: str, is_paper: bool = False):
+    def __init__(self, app_key: str, app_secret: str, account_number: str, account_password: str = "", is_paper: bool = False):
         """
         Initialize KIS REST API client
 
@@ -34,10 +34,12 @@ class KISRestAPI:
             app_key: App Key (발급받은 App Key)
             app_secret: App Secret (발급받은 App Secret)
             account_number: 계좌번호 (format: 12345678-01)
+            account_password: 계좌 비밀번호 (해외주식 거래 시 필수)
             is_paper: 모의투자 여부
         """
         self.app_key = app_key
         self.app_secret = app_secret
+        self.account_password = account_password
         self.is_paper = is_paper
         self.base_url = self.PAPER_BASE_URL if is_paper else self.REAL_BASE_URL
 
@@ -315,7 +317,8 @@ class KISRestAPI:
             "OVRS_EXCG_CD": "NASD",  # 해외거래소코드(NASD:나스닥, NYSE:뉴욕, AMEX:아멕스)
             "TR_CRCY_CD": "USD",  # 거래통화코드
             "CTX_AREA_FK200": "",  # 연속조회검색조건200
-            "CTX_AREA_NK200": ""  # 연속조회키200
+            "CTX_AREA_NK200": "",  # 연속조회키200
+            "ACNT_PWD": self.account_password  # 계좌 비밀번호 (해외주식 필수)
         }
 
         try:
@@ -454,6 +457,7 @@ class KISRestAPI:
             "OVRS_ORD_UNPR": str(price) if order_type == "limit" else "0",  # 해외주문단가
             "ORD_SVR_DVSN_CD": "0",  # 주문서버구분코드
             "ORD_DVSN": ord_dv,  # 주문구분(00:지정가, 01:시장가)
+            "ACNT_PWD": self.account_password  # 계좌 비밀번호
         }
 
         try:
@@ -521,6 +525,7 @@ class KISRestAPI:
             "OVRS_ORD_UNPR": str(price) if order_type == "limit" else "0",
             "ORD_SVR_DVSN_CD": "0",
             "ORD_DVSN": ord_dv,
+            "ACNT_PWD": self.account_password  # 계좌 비밀번호
         }
 
         try:

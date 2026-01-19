@@ -28,6 +28,7 @@ class BrokerService:
         self.api_key = settings.korea_investment_api_key
         self.api_secret = settings.korea_investment_api_secret
         self.account_number = settings.korea_investment_account_number
+        self.account_password = getattr(settings, 'korea_investment_account_password', '')
         self.is_paper = settings.korea_investment_paper_mode
         self.broker = None
         self.token_created_at = None
@@ -48,6 +49,7 @@ class BrokerService:
                 app_key=self.api_key,
                 app_secret=self.api_secret,
                 account_number=self.account_number,
+                account_password=self.account_password,
                 is_paper=self.is_paper
             )
 
@@ -89,12 +91,13 @@ class BrokerService:
 
         return needs_refresh
 
-    def reload_credentials(self, api_key: str, api_secret: str, account_number: str, is_paper: bool):
+    def reload_credentials(self, api_key: str, api_secret: str, account_number: str, account_password: str, is_paper: bool):
         """Reload broker with new credentials"""
         logger.info("Reloading broker with new credentials...")
         self.api_key = api_key
         self.api_secret = api_secret
         self.account_number = account_number
+        self.account_password = account_password
         self.is_paper = is_paper
         self._initialize_broker()
 

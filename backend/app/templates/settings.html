@@ -36,6 +36,12 @@
             <small style="color: #666; display: block; margin-top: 0.25rem;">형식: 12345678-01</small>
         </div>
 
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">계좌 비밀번호</label>
+            <input type="password" name="account_password" value="{{ api_keys.get('account_password', '') }}" placeholder="계좌 비밀번호 (해외주식 거래용)" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">⚠️ 해외주식 거래 시 필수 (4자리 숫자)</small>
+        </div>
+
         <div style="margin-bottom: 1.5rem;">
             <label style="display: flex; align-items: center; cursor: pointer;">
                 <input type="checkbox" name="paper_mode" value="true" {% if paper_mode %}checked{% endif %} style="margin-right: 0.5rem;">
@@ -84,6 +90,9 @@
             {% endif %}
             {% if api_keys.get('account_number') %}
             <li><strong>계좌번호:</strong> {{ api_keys.get('account_number') }} ✓</li>
+            {% endif %}
+            {% if api_keys.get('account_password') %}
+            <li><strong>계좌 비밀번호:</strong> **** ✓</li>
             {% endif %}
             {% if api_keys.get('gemini_api_key') %}
             <li><strong>Gemini API Key:</strong> {{ api_keys.get('gemini_api_key')[:8] }}... ✓</li>

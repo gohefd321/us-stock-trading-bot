@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     korea_investment_api_key: Optional[str] = None
     korea_investment_api_secret: Optional[str] = None
     korea_investment_account_number: Optional[str] = None
+    korea_investment_account_password: Optional[str] = None  # Account password for overseas stock trading
     korea_investment_paper_mode: bool = False  # Paper trading mode (simulation)
     gemini_api_key: Optional[str] = None
     reddit_client_id: Optional[str] = None

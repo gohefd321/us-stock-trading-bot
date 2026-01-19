@@ -214,6 +214,7 @@ async def save_api_keys(
     app_key: str = Form(""),
     app_secret: str = Form(""),
     account_number: str = Form(""),
+    account_password: str = Form(""),
     paper_mode: str = Form("false"),
     gemini_api_key: str = Form(""),
     reddit_client_id: str = Form(""),
@@ -260,6 +261,7 @@ async def save_api_keys(
         await save_key('app_key', app_key)
         await save_key('app_secret', app_secret)
         await save_key('account_number', account_number)
+        await save_key('account_password', account_password)
         await save_key('gemini_api_key', gemini_api_key)
         await save_key('reddit_client_id', reddit_client_id)
         await save_key('reddit_client_secret', reddit_client_secret)
@@ -295,6 +297,7 @@ async def save_api_keys(
         lines = update_env_var(lines, 'KOREA_INVESTMENT_API_KEY', app_key)
         lines = update_env_var(lines, 'KOREA_INVESTMENT_API_SECRET', app_secret)
         lines = update_env_var(lines, 'KOREA_INVESTMENT_ACCOUNT_NUMBER', account_number)
+        lines = update_env_var(lines, 'KOREA_INVESTMENT_ACCOUNT_PASSWORD', account_password)
         lines = update_env_var(lines, 'KOREA_INVESTMENT_PAPER_MODE', 'true' if paper_mode == 'true' else 'false')
         lines = update_env_var(lines, 'GEMINI_API_KEY', gemini_api_key)
         lines = update_env_var(lines, 'REDDIT_CLIENT_ID', reddit_client_id)
@@ -315,6 +318,7 @@ async def save_api_keys(
                     api_key=app_key,
                     api_secret=app_secret,
                     account_number=account_number,
+                    account_password=account_password,
                     is_paper=(paper_mode == 'true')
                 )
                 logger.info("Broker reloaded with new credentials")
