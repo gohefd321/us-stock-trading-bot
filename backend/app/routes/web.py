@@ -265,28 +265,45 @@ async def save_api_keys(
         await save_key('reddit_client_secret', reddit_client_secret)
         await save_key('reddit_user_agent', reddit_user_agent)
 
-        # Save paper mode to .env
+        # Save API keys and settings to .env file
         import os
         from ..config import PROJECT_ROOT
         env_path = PROJECT_ROOT / '.env'
 
+        # Read existing .env
         if env_path.exists():
             with open(env_path, 'r') as f:
                 lines = f.readlines()
+        else:
+            lines = []
 
-            # Update or add KOREA_INVESTMENT_PAPER_MODE
+        # Helper to update or add env variable
+        def update_env_var(lines, key, value):
+            if not value or not value.strip():
+                return lines
             found = False
             for i, line in enumerate(lines):
-                if line.startswith('KOREA_INVESTMENT_PAPER_MODE='):
-                    lines[i] = f'KOREA_INVESTMENT_PAPER_MODE={"true" if paper_mode == "true" else "false"}\n'
+                if line.startswith(f'{key}='):
+                    lines[i] = f'{key}={value}\n'
                     found = True
                     break
-
             if not found:
-                lines.append(f'\nKOREA_INVESTMENT_PAPER_MODE={"true" if paper_mode == "true" else "false"}\n')
+                lines.append(f'{key}={value}\n')
+            return lines
 
-            with open(env_path, 'w') as f:
-                f.writelines(lines)
+        # Update all keys
+        lines = update_env_var(lines, 'KOREA_INVESTMENT_API_KEY', app_key)
+        lines = update_env_var(lines, 'KOREA_INVESTMENT_API_SECRET', app_secret)
+        lines = update_env_var(lines, 'KOREA_INVESTMENT_ACCOUNT_NUMBER', account_number)
+        lines = update_env_var(lines, 'KOREA_INVESTMENT_PAPER_MODE', 'true' if paper_mode == 'true' else 'false')
+        lines = update_env_var(lines, 'GEMINI_API_KEY', gemini_api_key)
+        lines = update_env_var(lines, 'REDDIT_CLIENT_ID', reddit_client_id)
+        lines = update_env_var(lines, 'REDDIT_CLIENT_SECRET', reddit_client_secret)
+        lines = update_env_var(lines, 'REDDIT_USER_AGENT', reddit_user_agent)
+
+        # Write back to .env
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
 
         await db.commit()
 
