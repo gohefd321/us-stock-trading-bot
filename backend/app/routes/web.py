@@ -164,6 +164,7 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
             "api_keys": api_keys,
             "risk_params": risk_params,
             "paper_mode": settings.korea_investment_paper_mode,
+            "password_padding": api_keys.get('password_padding') == 'true',
             "success": request.query_params.get('success'),
             "error": request.query_params.get('error')
         })
@@ -215,6 +216,7 @@ async def save_api_keys(
     app_secret: str = Form(""),
     account_number: str = Form(""),
     account_password: str = Form(""),
+    password_padding: str = Form("false"),
     paper_mode: str = Form("false"),
     gemini_api_key: str = Form(""),
     reddit_client_id: str = Form(""),
@@ -262,6 +264,7 @@ async def save_api_keys(
         await save_key('app_secret', app_secret)
         await save_key('account_number', account_number)
         await save_key('account_password', account_password)
+        await save_key('password_padding', password_padding)
         await save_key('gemini_api_key', gemini_api_key)
         await save_key('reddit_client_id', reddit_client_id)
         await save_key('reddit_client_secret', reddit_client_secret)
@@ -298,6 +301,7 @@ async def save_api_keys(
         lines = update_env_var(lines, 'KOREA_INVESTMENT_API_SECRET', app_secret)
         lines = update_env_var(lines, 'KOREA_INVESTMENT_ACCOUNT_NUMBER', account_number)
         lines = update_env_var(lines, 'KOREA_INVESTMENT_ACCOUNT_PASSWORD', account_password)
+        lines = update_env_var(lines, 'KOREA_INVESTMENT_PASSWORD_PADDING', 'true' if password_padding == 'true' else 'false')
         lines = update_env_var(lines, 'KOREA_INVESTMENT_PAPER_MODE', 'true' if paper_mode == 'true' else 'false')
         lines = update_env_var(lines, 'GEMINI_API_KEY', gemini_api_key)
         lines = update_env_var(lines, 'REDDIT_CLIENT_ID', reddit_client_id)
@@ -319,6 +323,7 @@ async def save_api_keys(
                     api_secret=app_secret,
                     account_number=account_number,
                     account_password=account_password,
+                    password_padding=(password_padding == 'true'),
                     is_paper=(paper_mode == 'true')
                 )
                 logger.info("Broker reloaded with new credentials")

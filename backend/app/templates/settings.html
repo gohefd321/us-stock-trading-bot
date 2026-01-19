@@ -42,6 +42,14 @@
             <small style="color: #666; display: block; margin-top: 0.25rem;">⚠️ 해외주식 거래 시 필수 (4자리 숫자)</small>
         </div>
 
+        <div style="margin-bottom: 1rem;">
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" name="password_padding" value="true" {% if password_padding %}checked{% endif %} style="margin-right: 0.5rem;">
+                <span>비밀번호 8자리 패딩 사용 (4자리 → 8자리 공백 패딩)</span>
+            </label>
+            <small style="color: #666; display: block; margin-top: 0.25rem; margin-left: 1.75rem;">일부 API에서 비밀번호를 8자리로 요구하는 경우 체크</small>
+        </div>
+
         <div style="margin-bottom: 1.5rem;">
             <label style="display: flex; align-items: center; cursor: pointer;">
                 <input type="checkbox" name="paper_mode" value="true" {% if paper_mode %}checked{% endif %} style="margin-right: 0.5rem;">

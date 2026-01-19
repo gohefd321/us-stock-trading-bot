@@ -26,7 +26,7 @@ class KISRestAPI:
     REAL_BASE_URL = "https://openapi.koreainvestment.com:9443"  # 실전투자
     PAPER_BASE_URL = "https://openapivts.koreainvestment.com:29443"  # 모의투자
 
-    def __init__(self, app_key: str, app_secret: str, account_number: str, account_password: str = "", is_paper: bool = False):
+    def __init__(self, app_key: str, app_secret: str, account_number: str, account_password: str = "", password_padding: bool = False, is_paper: bool = False):
         """
         Initialize KIS REST API client
 
@@ -35,12 +35,19 @@ class KISRestAPI:
             app_secret: App Secret (발급받은 App Secret)
             account_number: 계좌번호 (format: 12345678-01)
             account_password: 계좌 비밀번호 (해외주식 거래 시 필수)
+            password_padding: 비밀번호 8자리 패딩 사용 여부 (True: 4자리→8자리 공백 패딩)
             is_paper: 모의투자 여부
         """
         self.app_key = app_key
         self.app_secret = app_secret
-        # 계좌 비밀번호는 8자리로 패딩 (4자리 입력 시 뒤에 공백 4개 추가)
-        self.account_password = account_password.ljust(8) if account_password else ""
+        # 비밀번호 패딩 옵션에 따라 처리
+        if password_padding and account_password:
+            self.account_password = account_password.ljust(8)  # 8자리로 공백 패딩
+            logger.info(f"Password padding enabled: {len(account_password)} → 8 chars")
+        else:
+            self.account_password = account_password  # 원본 그대로 사용
+            if account_password:
+                logger.info(f"Password padding disabled: using {len(account_password)} chars as-is")
         self.is_paper = is_paper
         self.base_url = self.PAPER_BASE_URL if is_paper else self.REAL_BASE_URL
 
