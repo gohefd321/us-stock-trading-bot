@@ -111,7 +111,7 @@ class BrokerService:
             )
 
             # Log raw response for debugging
-            logger.debug(f"Balance API response: {balance_data}")
+            logger.info(f"Balance API response keys: {balance_data.keys() if isinstance(balance_data, dict) else type(balance_data)}")
 
             # Try to extract balance information
             # API response format varies, try different keys
@@ -123,16 +123,18 @@ class BrokerService:
                 output2 = balance_data['output2'][0] if isinstance(balance_data['output2'], list) else balance_data['output2']
                 cash_balance = float(output2.get('dnca_tot_amt', 0))
                 total_value = float(output2.get('tot_evlu_amt', 0))
+                logger.info(f"Using output2 format")
 
             # Try output1 format (alternative)
             elif 'output1' in balance_data and balance_data['output1']:
                 output1 = balance_data['output1'][0] if isinstance(balance_data['output1'], list) else balance_data['output1']
                 cash_balance = float(output1.get('prvs_rcdl_excc_amt', 0))  # 예수금
                 total_value = float(output1.get('tot_evlu_amt', 0))
+                logger.info(f"Using output1 format")
 
             # If still no data, return zeros
             if cash_balance == 0 and total_value == 0:
-                logger.warning("Could not extract balance from API response")
+                logger.warning(f"Could not extract balance from API response. Available keys: {list(balance_data.keys()) if isinstance(balance_data, dict) else 'N/A'}")
 
             result = {
                 'cash_balance': cash_balance,
@@ -144,8 +146,18 @@ class BrokerService:
             logger.info(f"Balance fetched: Cash={cash_balance}, Total={total_value}")
             return result
 
+        except KeyError as e:
+            logger.error(f"Failed to fetch balance - missing key: {e}")
+            logger.warning("This might be due to Mojito2 library expecting different API response format")
+            return {
+                'cash_balance': 0,
+                'total_value': 0,
+                'holdings_value': 0,
+                'timestamp': datetime.now().isoformat(),
+                'error': f'API response format error: {e}'
+            }
         except Exception as e:
-            logger.error(f"Failed to fetch balance: {e}")
+            logger.error(f"Failed to fetch balance: {e}", exc_info=True)
             # Return zeros instead of raising
             return {
                 'cash_balance': 0,
