@@ -39,7 +39,8 @@ class KISRestAPI:
         """
         self.app_key = app_key
         self.app_secret = app_secret
-        self.account_password = account_password
+        # 계좌 비밀번호는 8자리로 패딩 (4자리 입력 시 뒤에 공백 4개 추가)
+        self.account_password = account_password.ljust(8) if account_password else ""
         self.is_paper = is_paper
         self.base_url = self.PAPER_BASE_URL if is_paper else self.REAL_BASE_URL
 
