@@ -1,13 +1,13 @@
 """
 Korea Investment Securities Broker Service
-Wrapper for Mojito2 library for US stock trading
+Direct REST API implementation for US stock trading
 """
 
 import asyncio
 import logging
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
-import mojito
+from .kis_rest_api import KISRestAPI
 
 logger = logging.getLogger(__name__)
 
@@ -38,21 +38,28 @@ class BrokerService:
             logger.warning("Please configure API keys in .env file or via WebUI settings.")
             return
 
-        # Initialize Mojito broker
+        # Initialize REST API broker
         self._initialize_broker()
 
     def _initialize_broker(self):
         """Initialize or reinitialize broker with access token"""
         try:
-            self.broker = mojito.KoreaInvestment(
-                api_key=self.api_key,
-                api_secret=self.api_secret,
-                acc_no=self.account_number,
-                mock=self.is_paper
+            self.broker = KISRestAPI(
+                app_key=self.api_key,
+                app_secret=self.api_secret,
+                account_number=self.account_number,
+                is_paper=self.is_paper
             )
-            self.token_created_at = datetime.now()
-            logger.info(f"Broker initialized (paper_mode={self.is_paper})")
-            logger.info(f"Access token created at: {self.token_created_at.isoformat()}")
+
+            # Get access token
+            if self.broker.get_access_token():
+                self.token_created_at = datetime.now()
+                logger.info(f"Broker initialized (paper_mode={self.is_paper})")
+                logger.info(f"Access token created at: {self.token_created_at.isoformat()}")
+            else:
+                logger.error("Failed to get access token")
+                self.broker = None
+                self.token_created_at = None
         except Exception as e:
             logger.error(f"Failed to initialize broker: {e}")
             logger.warning("Broker service will be unavailable. Please check your API credentials.")
@@ -93,7 +100,7 @@ class BrokerService:
 
     async def get_balance(self) -> Dict:
         """
-        Get account balance (cash + stocks)
+        Get account balance (cash + stocks) - US stocks only
 
         Returns:
             Dictionary with balance information
@@ -103,59 +110,12 @@ class BrokerService:
             raise RuntimeError("Broker service not initialized. Please configure API credentials.")
 
         try:
-            # Run in thread pool to avoid blocking
-            loop = asyncio.get_event_loop()
-            balance_data = await loop.run_in_executor(
-                None,
-                self.broker.fetch_balance
-            )
+            # Use new REST API implementation
+            balance_data = await self.broker.get_us_balance()
 
-            # Log raw response for debugging
-            logger.info(f"Balance API response keys: {balance_data.keys() if isinstance(balance_data, dict) else type(balance_data)}")
+            logger.info(f"Balance fetched: Cash=${balance_data['cash_balance']:.2f}, Total=${balance_data['total_value']:.2f}")
+            return balance_data
 
-            # Try to extract balance information
-            # API response format varies, try different keys
-            cash_balance = 0
-            total_value = 0
-
-            # Try output2 format (Korean stocks)
-            if 'output2' in balance_data and balance_data['output2']:
-                output2 = balance_data['output2'][0] if isinstance(balance_data['output2'], list) else balance_data['output2']
-                cash_balance = float(output2.get('dnca_tot_amt', 0))
-                total_value = float(output2.get('tot_evlu_amt', 0))
-                logger.info(f"Using output2 format")
-
-            # Try output1 format (alternative)
-            elif 'output1' in balance_data and balance_data['output1']:
-                output1 = balance_data['output1'][0] if isinstance(balance_data['output1'], list) else balance_data['output1']
-                cash_balance = float(output1.get('prvs_rcdl_excc_amt', 0))  # 예수금
-                total_value = float(output1.get('tot_evlu_amt', 0))
-                logger.info(f"Using output1 format")
-
-            # If still no data, return zeros
-            if cash_balance == 0 and total_value == 0:
-                logger.warning(f"Could not extract balance from API response. Available keys: {list(balance_data.keys()) if isinstance(balance_data, dict) else 'N/A'}")
-
-            result = {
-                'cash_balance': cash_balance,
-                'total_value': total_value,
-                'holdings_value': total_value - cash_balance,
-                'timestamp': datetime.now().isoformat()
-            }
-
-            logger.info(f"Balance fetched: Cash={cash_balance}, Total={total_value}")
-            return result
-
-        except KeyError as e:
-            logger.error(f"Failed to fetch balance - missing key: {e}")
-            logger.warning("This might be due to Mojito2 library expecting different API response format")
-            return {
-                'cash_balance': 0,
-                'total_value': 0,
-                'holdings_value': 0,
-                'timestamp': datetime.now().isoformat(),
-                'error': f'API response format error: {e}'
-            }
         except Exception as e:
             logger.error(f"Failed to fetch balance: {e}", exc_info=True)
             # Return zeros instead of raising
@@ -163,16 +123,19 @@ class BrokerService:
                 'cash_balance': 0,
                 'total_value': 0,
                 'holdings_value': 0,
+                'positions': [],
+                'currency': 'USD',
                 'timestamp': datetime.now().isoformat(),
                 'error': str(e)
             }
 
-    async def get_us_stock_price(self, ticker: str) -> Optional[float]:
+    async def get_us_stock_price(self, ticker: str, exchange: str = "NASD") -> Optional[float]:
         """
         Get current price for US stock
 
         Args:
             ticker: Stock ticker symbol (e.g., AAPL)
+            exchange: Exchange code (NASD, NYSE, AMEX)
 
         Returns:
             Current price or None if failed
@@ -182,17 +145,10 @@ class BrokerService:
             return None
 
         try:
-            loop = asyncio.get_event_loop()
-            price_data = await loop.run_in_executor(
-                None,
-                self.broker.fetch_price,
-                ticker
-            )
+            # Use new REST API implementation
+            current_price = await self.broker.get_us_stock_price(ticker, exchange)
 
-            # Extract current price
-            current_price = float(price_data.get('output', {}).get('last', 0))
-
-            if current_price > 0:
+            if current_price and current_price > 0:
                 logger.debug(f"Price for {ticker}: ${current_price}")
                 return current_price
             else:
@@ -235,48 +191,31 @@ class BrokerService:
         try:
             logger.info(f"Placing order: {action} {quantity} {ticker} ({order_type})")
 
-            loop = asyncio.get_event_loop()
+            # Use new REST API implementation
+            order_type_lower = order_type.lower()
+            price = limit_price if limit_price else 0
 
-            if action == "BUY":
-                if order_type == "MARKET":
-                    result = await loop.run_in_executor(
-                        None,
-                        self.broker.create_market_buy_order,
-                        ticker,
-                        quantity
-                    )
-                else:  # LIMIT
-                    result = await loop.run_in_executor(
-                        None,
-                        self.broker.create_limit_buy_order,
-                        ticker,
-                        limit_price,
-                        quantity
-                    )
+            if action.upper() == "BUY":
+                result = await self.broker.buy_us_stock(
+                    ticker=ticker,
+                    quantity=quantity,
+                    price=price,
+                    order_type=order_type_lower
+                )
             else:  # SELL
-                if order_type == "MARKET":
-                    result = await loop.run_in_executor(
-                        None,
-                        self.broker.create_market_sell_order,
-                        ticker,
-                        quantity
-                    )
-                else:  # LIMIT
-                    result = await loop.run_in_executor(
-                        None,
-                        self.broker.create_limit_sell_order,
-                        ticker,
-                        limit_price,
-                        quantity
-                    )
+                result = await self.broker.sell_us_stock(
+                    ticker=ticker,
+                    quantity=quantity,
+                    price=price,
+                    order_type=order_type_lower
+                )
 
             # Parse result
             order_info = {
-                'success': result.get('rt_cd') == '0',
-                'order_id': result.get('output', {}).get('ODNO', ''),
-                'message': result.get('msg1', ''),
-                'timestamp': datetime.now().isoformat(),
-                'raw_response': result
+                'success': result.get('success', False),
+                'order_id': result.get('order_number', ''),
+                'message': result.get('message', result.get('error', '')),
+                'timestamp': datetime.now().isoformat()
             }
 
             if order_info['success']:
@@ -306,36 +245,31 @@ class BrokerService:
             return []
 
         try:
-            loop = asyncio.get_event_loop()
-            positions_data = await loop.run_in_executor(
-                None,
-                self.broker.fetch_present_balance
-            )
+            # Use new REST API implementation
+            balance_data = await self.broker.get_us_balance()
 
             positions = []
-            output = positions_data.get('output1', [])
+            output = balance_data.get('positions', [])
 
             for pos in output:
-                # Only include US stocks
-                if pos.get('ovrs_excg_cd') == 'NASD' or pos.get('ovrs_excg_cd') == 'NYSE':
-                    ticker = pos.get('ovrs_pdno', '')
-                    quantity = int(pos.get('ord_psbl_qty', 0))
-                    avg_cost = float(pos.get('pchs_avg_pric', 0))
-                    current_price = float(pos.get('now_pric2', 0))
-                    total_value = float(pos.get('ovrs_stck_evlu_amt', 0))
-                    profit_loss = float(pos.get('frcr_evlu_pfls_amt', 0))
-                    profit_loss_pct = float(pos.get('evlu_pfls_rt', 0))
+                ticker = pos.get('ovrs_pdno', '')
+                quantity = int(pos.get('ord_psbl_qty', 0))
+                avg_cost = float(pos.get('pchs_avg_pric', 0))
+                current_price = float(pos.get('now_pric2', 0))
+                total_value = float(pos.get('ovrs_stck_evlu_amt', 0))
+                profit_loss = float(pos.get('frcr_evlu_pfls_amt', 0))
+                profit_loss_pct = float(pos.get('evlu_pfls_rt', 0))
 
-                    if quantity > 0:
-                        positions.append({
-                            'ticker': ticker,
-                            'quantity': quantity,
-                            'avg_cost': avg_cost,
-                            'current_price': current_price,
-                            'total_value': total_value,
-                            'profit_loss': profit_loss,
-                            'profit_loss_pct': profit_loss_pct
-                        })
+                if quantity > 0:
+                    positions.append({
+                        'ticker': ticker,
+                        'quantity': quantity,
+                        'avg_cost': avg_cost,
+                        'current_price': current_price,
+                        'total_value': total_value,
+                        'profit_loss': profit_loss,
+                        'profit_loss_pct': profit_loss_pct
+                    })
 
             logger.info(f"Fetched {len(positions)} US positions")
             return positions
