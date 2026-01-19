@@ -331,14 +331,33 @@ class KISRestAPI:
 
             result = response.json()
 
+            # Log full API response for debugging
+            logger.info(f"US Balance API Response: rt_cd={result.get('rt_cd')}, msg_cd={result.get('msg_cd')}, msg1={result.get('msg1')}")
+            logger.debug(f"Full response: {result}")
+
             if result.get("rt_cd") == "0":
                 output1 = result.get("output1", [])
-                output2 = result.get("output2", [{}])[0]
+                output2 = result.get("output2", [{}])[0] if result.get("output2") else {}
 
-                # USD 기준
-                cash_balance = float(output2.get("frcr_pchs_amt1", 0))  # 외화매입금액
-                total_value = float(output2.get("tot_evlu_pfls_amt", 0))  # 총평가손익금액
-                holdings_value = float(output2.get("ovrs_tot_pfls", 0))  # 해외총손익
+                logger.info(f"output2 data: {output2}")
+
+                # USD 기준 - 한국투자증권 API 문서 기준 필드명
+                # 실제 응답에서 필드명이 다를 수 있으므로 여러 가능성 확인
+                cash_balance_str = output2.get("frcr_pchs_amt1", output2.get("prvs_rcdl_exrt", "0"))
+                total_value_str = output2.get("tot_evlu_pfls_amt", output2.get("tot_evlu_amt", "0"))
+                holdings_value_str = output2.get("ovrs_tot_pfls", output2.get("frcr_evlu_pfls_amt", "0"))
+
+                logger.info(f"Parsed values - cash: {cash_balance_str}, total: {total_value_str}, holdings: {holdings_value_str}")
+
+                try:
+                    cash_balance = float(cash_balance_str) if cash_balance_str else 0.0
+                    total_value = float(total_value_str) if total_value_str else 0.0
+                    holdings_value = float(holdings_value_str) if holdings_value_str else 0.0
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Failed to convert balance values: {e}")
+                    cash_balance = 0.0
+                    total_value = 0.0
+                    holdings_value = 0.0
 
                 return {
                     "cash_balance": cash_balance,
