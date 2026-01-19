@@ -7,11 +7,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import logging
+import asyncio
 
 from .config import settings
 from .database import init_db
 from .utils.logging_config import setup_logging
-from .dependencies import init_services
+from .dependencies import init_services, get_broker_service
 from .routes import (
     scheduler_router,
     trading_router,
@@ -24,6 +25,9 @@ from .routes.web import router as web_router
 # Setup logging
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
+
+# Background task for token refresh
+_token_refresh_task = None
 
 # Create FastAPI app
 app = FastAPI(
@@ -50,9 +54,38 @@ app.include_router(signals_router)
 app.include_router(settings_router)
 
 
+async def token_refresh_loop():
+    """Background task to refresh access token every 22 hours"""
+    global _token_refresh_task
+
+    while True:
+        try:
+            # Wait 22 hours (79200 seconds)
+            await asyncio.sleep(22 * 60 * 60)
+
+            # Get broker service and refresh token
+            broker = await get_broker_service()
+            if broker and broker.needs_token_refresh():
+                logger.info("22 hours elapsed, refreshing access token...")
+                success = broker.refresh_token()
+                if success:
+                    logger.info("✓ Access token refreshed successfully")
+                else:
+                    logger.error("✗ Failed to refresh access token")
+
+        except asyncio.CancelledError:
+            logger.info("Token refresh task cancelled")
+            break
+        except Exception as e:
+            logger.error(f"Error in token refresh loop: {e}")
+            # Continue loop even on error
+
+
 @app.on_event("startup")
 async def startup_event():
     """Startup event handler"""
+    global _token_refresh_task
+
     logger.info("Starting US Stock Trading Bot...")
     logger.info(f"Environment: {settings.app_name} v{settings.app_version}")
 
@@ -72,14 +105,28 @@ async def startup_event():
         logger.error(f"Failed to initialize services: {e}")
         raise
 
+    # Start token refresh background task
+    _token_refresh_task = asyncio.create_task(token_refresh_loop())
+    logger.info("Started access token refresh task (every 22 hours)")
+
     logger.info("Application startup complete")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Shutdown event handler"""
+    global _token_refresh_task
+
     logger.info("Shutting down US Stock Trading Bot...")
-    # Cleanup tasks will be added here
+
+    # Cancel token refresh task
+    if _token_refresh_task:
+        _token_refresh_task.cancel()
+        try:
+            await _token_refresh_task
+        except asyncio.CancelledError:
+            pass
+
     logger.info("Application shutdown complete")
 
 

@@ -6,7 +6,7 @@ Wrapper for Mojito2 library for US stock trading
 import asyncio
 import logging
 from typing import Optional, Dict, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import mojito
 
 logger = logging.getLogger(__name__)
@@ -30,6 +30,7 @@ class BrokerService:
         self.account_number = settings.korea_investment_account_number
         self.is_paper = settings.korea_investment_paper_mode
         self.broker = None
+        self.token_created_at = None
 
         # Only initialize broker if credentials are provided
         if not self.api_key or not self.api_secret or not self.account_number:
@@ -38,6 +39,10 @@ class BrokerService:
             return
 
         # Initialize Mojito broker
+        self._initialize_broker()
+
+    def _initialize_broker(self):
+        """Initialize or reinitialize broker with access token"""
         try:
             self.broker = mojito.KoreaInvestment(
                 api_key=self.api_key,
@@ -45,10 +50,46 @@ class BrokerService:
                 acc_no=self.account_number,
                 mock=self.is_paper
             )
+            self.token_created_at = datetime.now()
             logger.info(f"Broker initialized (paper_mode={self.is_paper})")
+            logger.info(f"Access token created at: {self.token_created_at.isoformat()}")
         except Exception as e:
             logger.error(f"Failed to initialize broker: {e}")
             logger.warning("Broker service will be unavailable. Please check your API credentials.")
+            self.broker = None
+            self.token_created_at = None
+
+    def refresh_token(self):
+        """Refresh access token (call every 22 hours)"""
+        if not self.api_key or not self.api_secret or not self.account_number:
+            logger.warning("Cannot refresh token: API credentials not configured")
+            return False
+
+        logger.info("Refreshing access token...")
+        self._initialize_broker()
+        return self.broker is not None
+
+    def needs_token_refresh(self) -> bool:
+        """Check if token needs refresh (older than 22 hours)"""
+        if not self.token_created_at:
+            return True
+
+        age = datetime.now() - self.token_created_at
+        needs_refresh = age > timedelta(hours=22)
+
+        if needs_refresh:
+            logger.warning(f"Token is {age.total_seconds() / 3600:.1f} hours old, needs refresh")
+
+        return needs_refresh
+
+    def reload_credentials(self, api_key: str, api_secret: str, account_number: str, is_paper: bool):
+        """Reload broker with new credentials"""
+        logger.info("Reloading broker with new credentials...")
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.account_number = account_number
+        self.is_paper = is_paper
+        self._initialize_broker()
 
     async def get_balance(self) -> Dict:
         """

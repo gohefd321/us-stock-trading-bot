@@ -307,7 +307,21 @@ async def save_api_keys(
 
         await db.commit()
 
-        return RedirectResponse(url="/settings?success=API 키가 저장되었습니다", status_code=303)
+        # Reload broker with new credentials if provided
+        if app_key and app_secret and account_number:
+            try:
+                broker = services['broker']
+                broker.reload_credentials(
+                    api_key=app_key,
+                    api_secret=app_secret,
+                    account_number=account_number,
+                    is_paper=(paper_mode == 'true')
+                )
+                logger.info("Broker reloaded with new credentials")
+            except Exception as e:
+                logger.error(f"Failed to reload broker: {e}")
+
+        return RedirectResponse(url="/settings?success=API 키가 저장되고 브로커가 리로드되었습니다", status_code=303)
 
     except Exception as e:
         logger.error(f"Failed to save API keys: {e}")
