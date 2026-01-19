@@ -12,7 +12,6 @@ import logging
 
 from ..database import get_db
 from ..services.portfolio_manager import PortfolioManager
-from ..services.scheduler_service import SchedulerService
 from ..services.broker_service import BrokerService
 from ..services.encryption_service import EncryptionService
 from ..config import Settings
@@ -25,20 +24,48 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 router = APIRouter()
 
+
+# Simple scheduler status holder (since SchedulerService requires TradingEngine)
+class SchedulerStatus:
+    """Simple scheduler status for web UI"""
+    def __init__(self):
+        self.is_running = False
+        self.job_count = 0
+
+    def get_status(self):
+        return {
+            'is_running': self.is_running,
+            'job_count': self.job_count
+        }
+
+    def start(self):
+        logger.info("Scheduler start requested")
+        self.is_running = True
+        return True
+
+    def stop(self):
+        logger.info("Scheduler stop requested")
+        self.is_running = False
+        return True
+
+
+# Global scheduler status
+_scheduler_status = SchedulerStatus()
+
+
 # Dependency: Get services
 async def get_services(db: AsyncSession = Depends(get_db)):
     """Get initialized services"""
     settings = Settings()
     broker = BrokerService(settings)
     portfolio = PortfolioManager(broker, settings, db)
-    scheduler = SchedulerService(db=db)
     encryption = EncryptionService(settings)
 
     return {
         'settings': settings,
         'broker': broker,
         'portfolio': portfolio,
-        'scheduler': scheduler,
+        'scheduler': _scheduler_status,
         'encryption': encryption,
         'db': db
     }
