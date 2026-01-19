@@ -215,6 +215,10 @@ async def save_api_keys(
     app_secret: str = Form(""),
     account_number: str = Form(""),
     paper_mode: str = Form("false"),
+    gemini_api_key: str = Form(""),
+    reddit_client_id: str = Form(""),
+    reddit_client_secret: str = Form(""),
+    reddit_user_agent: str = Form(""),
     services: dict = Depends(get_services)
 ):
     """Save API keys and redirect to settings"""
@@ -256,6 +260,10 @@ async def save_api_keys(
         await save_key('app_key', app_key)
         await save_key('app_secret', app_secret)
         await save_key('account_number', account_number)
+        await save_key('gemini_api_key', gemini_api_key)
+        await save_key('reddit_client_id', reddit_client_id)
+        await save_key('reddit_client_secret', reddit_client_secret)
+        await save_key('reddit_user_agent', reddit_user_agent)
 
         # Save paper mode to .env
         import os

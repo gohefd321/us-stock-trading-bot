@@ -18,6 +18,8 @@
     <h2>🔑 API 키 관리</h2>
 
     <form method="post" action="/settings/save-keys" style="margin-bottom: 2rem;">
+        <h3 style="margin-top: 0; font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem;">한국투자증권 API</h3>
+
         <div style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">App Key</label>
             <input type="text" name="app_key" value="{{ api_keys.get('app_key', '') }}" placeholder="한국투자증권 App Key 입력" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
@@ -41,6 +43,32 @@
             </label>
         </div>
 
+        <h3 style="font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-top: 2rem;">Google Gemini API</h3>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Gemini API Key</label>
+            <input type="password" name="gemini_api_key" value="{{ api_keys.get('gemini_api_key', '') }}" placeholder="Google Gemini API Key 입력" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">AI 거래 결정에 사용됩니다</small>
+        </div>
+
+        <h3 style="font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-top: 2rem;">Reddit API (WSB 스크래핑)</h3>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Reddit Client ID</label>
+            <input type="text" name="reddit_client_id" value="{{ api_keys.get('reddit_client_id', '') }}" placeholder="Reddit Client ID 입력" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+        </div>
+
+        <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Reddit Client Secret</label>
+            <input type="password" name="reddit_client_secret" value="{{ api_keys.get('reddit_client_secret', '') }}" placeholder="Reddit Client Secret 입력" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+        </div>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Reddit User Agent</label>
+            <input type="text" name="reddit_user_agent" value="{{ api_keys.get('reddit_user_agent', '') }}" placeholder="예: MyTradingBot/1.0" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">WallStreetBets 시그널 수집에 사용됩니다</small>
+        </div>
+
         <button type="submit" class="success">저장</button>
     </form>
 
@@ -49,13 +77,25 @@
         <h3 style="margin-top: 0; font-size: 0.95rem; color: #666;">현재 설정된 API 키</h3>
         <ul style="margin: 0; padding-left: 1.5rem;">
             {% if api_keys.get('app_key') %}
-            <li>App Key: {{ api_keys.get('app_key')[:8] }}... ✓</li>
+            <li><strong>한투 App Key:</strong> {{ api_keys.get('app_key')[:8] }}... ✓</li>
             {% endif %}
             {% if api_keys.get('app_secret') %}
-            <li>App Secret: ********** ✓</li>
+            <li><strong>한투 App Secret:</strong> ********** ✓</li>
             {% endif %}
             {% if api_keys.get('account_number') %}
-            <li>계좌번호: {{ api_keys.get('account_number') }} ✓</li>
+            <li><strong>계좌번호:</strong> {{ api_keys.get('account_number') }} ✓</li>
+            {% endif %}
+            {% if api_keys.get('gemini_api_key') %}
+            <li><strong>Gemini API Key:</strong> {{ api_keys.get('gemini_api_key')[:8] }}... ✓</li>
+            {% endif %}
+            {% if api_keys.get('reddit_client_id') %}
+            <li><strong>Reddit Client ID:</strong> {{ api_keys.get('reddit_client_id')[:8] }}... ✓</li>
+            {% endif %}
+            {% if api_keys.get('reddit_client_secret') %}
+            <li><strong>Reddit Client Secret:</strong> ********** ✓</li>
+            {% endif %}
+            {% if api_keys.get('reddit_user_agent') %}
+            <li><strong>Reddit User Agent:</strong> {{ api_keys.get('reddit_user_agent') }} ✓</li>
             {% endif %}
         </ul>
     </div>

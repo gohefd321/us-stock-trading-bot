@@ -8,6 +8,7 @@ from .llm_decisions import LLMDecision
 from .signals import Signal
 from .portfolio_snapshots import PortfolioSnapshot
 from .user_preferences import UserPreference
+from .risk_parameters import RiskParameter
 
 __all__ = [
     "APIKey",
@@ -16,4 +17,5 @@ __all__ = [
     "Signal",
     "PortfolioSnapshot",
     "UserPreference",
+    "RiskParameter",
 ]
