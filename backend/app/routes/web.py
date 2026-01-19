@@ -59,7 +59,7 @@ async def get_services(db: AsyncSession = Depends(get_db)):
     settings = Settings()
     broker = BrokerService(settings)
     portfolio = PortfolioManager(broker, settings, db)
-    encryption = EncryptionService(settings)
+    encryption = EncryptionService()  # Uses default key file path
 
     return {
         'settings': settings,
