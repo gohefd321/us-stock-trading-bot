@@ -11,9 +11,6 @@ aiosqlite==0.20.0
 # Encryption
 cryptography==43.0.3
 
-# Korea Investment Securities API
-mojito2==0.1.6
-
 # Market Data & Signal Sources
 yfinance==0.2.48
 praw==7.8.1  # Reddit API
@@ -34,8 +31,8 @@ python-socketio==5.11.4
 websockets==13.1
 
 # Utilities
-pydantic==2.10.3
-pydantic-settings==2.6.1
+pydantic==2.9.2
+pydantic-settings==2.5.2
 python-multipart==0.0.17
 pandas==2.2.3
 numpy==2.2.1
