@@ -267,7 +267,8 @@ async def save_api_keys(
 
         # Save paper mode to .env
         import os
-        env_path = services['settings'].PROJECT_ROOT / '.env'
+        from ..config import PROJECT_ROOT
+        env_path = PROJECT_ROOT / '.env'
 
         if env_path.exists():
             with open(env_path, 'r') as f:
