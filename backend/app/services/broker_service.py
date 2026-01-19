@@ -110,9 +110,29 @@ class BrokerService:
                 self.broker.fetch_balance
             )
 
-            # Extract relevant information
-            cash_balance = float(balance_data.get('output2', [{}])[0].get('dnca_tot_amt', 0))
-            total_value = float(balance_data.get('output2', [{}])[0].get('tot_evlu_amt', 0))
+            # Log raw response for debugging
+            logger.debug(f"Balance API response: {balance_data}")
+
+            # Try to extract balance information
+            # API response format varies, try different keys
+            cash_balance = 0
+            total_value = 0
+
+            # Try output2 format (Korean stocks)
+            if 'output2' in balance_data and balance_data['output2']:
+                output2 = balance_data['output2'][0] if isinstance(balance_data['output2'], list) else balance_data['output2']
+                cash_balance = float(output2.get('dnca_tot_amt', 0))
+                total_value = float(output2.get('tot_evlu_amt', 0))
+
+            # Try output1 format (alternative)
+            elif 'output1' in balance_data and balance_data['output1']:
+                output1 = balance_data['output1'][0] if isinstance(balance_data['output1'], list) else balance_data['output1']
+                cash_balance = float(output1.get('prvs_rcdl_excc_amt', 0))  # 예수금
+                total_value = float(output1.get('tot_evlu_amt', 0))
+
+            # If still no data, return zeros
+            if cash_balance == 0 and total_value == 0:
+                logger.warning("Could not extract balance from API response")
 
             result = {
                 'cash_balance': cash_balance,
@@ -121,12 +141,19 @@ class BrokerService:
                 'timestamp': datetime.now().isoformat()
             }
 
-            logger.info(f"Balance fetched: {result}")
+            logger.info(f"Balance fetched: Cash={cash_balance}, Total={total_value}")
             return result
 
         except Exception as e:
             logger.error(f"Failed to fetch balance: {e}")
-            raise
+            # Return zeros instead of raising
+            return {
+                'cash_balance': 0,
+                'total_value': 0,
+                'holdings_value': 0,
+                'timestamp': datetime.now().isoformat(),
+                'error': str(e)
+            }
 
     async def get_us_stock_price(self, ticker: str) -> Optional[float]:
         """

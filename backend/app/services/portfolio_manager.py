@@ -41,16 +41,50 @@ class PortfolioManager:
         Returns:
             Dictionary with current portfolio information
         """
+        # Check if broker is initialized
+        if not self.broker or not self.broker.broker:
+            logger.warning("Broker not initialized. Returning empty portfolio state.")
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'cash_balance': 0,
+                'holdings_value': 0,
+                'total_value': 0,
+                'positions': [],
+                'position_count': 0,
+                'daily_pnl': 0,
+                'daily_pnl_pct': 0,
+                'total_pnl': 0,
+                'total_pnl_pct': 0,
+                'warning': 'Broker not initialized. Please configure API credentials.'
+            }
+
         try:
             # Fetch balance from broker
             balance = await self.broker.get_balance()
+
+            # Check if balance fetch had error
+            if 'error' in balance:
+                logger.warning(f"Balance fetch error: {balance['error']}")
+                return {
+                    'timestamp': datetime.now().isoformat(),
+                    'cash_balance': 0,
+                    'holdings_value': 0,
+                    'total_value': 0,
+                    'positions': [],
+                    'position_count': 0,
+                    'daily_pnl': 0,
+                    'daily_pnl_pct': 0,
+                    'total_pnl': 0,
+                    'total_pnl_pct': 0,
+                    'error': balance['error']
+                }
 
             # Fetch positions
             positions = await self.broker.get_us_positions()
 
             # Calculate totals
-            cash_balance = balance['cash_balance']
-            holdings_value = sum(pos['total_value'] for pos in positions)
+            cash_balance = balance.get('cash_balance', 0)
+            holdings_value = sum(pos.get('total_value', 0) for pos in positions)
             total_value = cash_balance + holdings_value
 
             # Calculate P/L
@@ -80,7 +114,19 @@ class PortfolioManager:
 
         except Exception as e:
             logger.error(f"Failed to get portfolio state: {e}")
-            raise
+            return {
+                'timestamp': datetime.now().isoformat(),
+                'cash_balance': 0,
+                'holdings_value': 0,
+                'total_value': 0,
+                'positions': [],
+                'position_count': 0,
+                'daily_pnl': 0,
+                'daily_pnl_pct': 0,
+                'total_pnl': 0,
+                'total_pnl_pct': 0,
+                'error': str(e)
+            }
 
     async def get_position(self, ticker: str) -> Optional[Dict]:
         """
