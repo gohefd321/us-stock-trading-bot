@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Optional
 from datetime import datetime
 import logging
+from pydantic import BaseModel
 
 from ..database import get_db
 from ..dependencies import get_market_data_scheduler, get_portfolio_manager, get_broker_service
@@ -18,6 +19,12 @@ from ..services.broker_service import BrokerService
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/recommendations", tags=["recommendations"])
+
+
+class ExecuteRecommendationRequest(BaseModel):
+    ticker: str
+    action: str
+    percentage: float
 
 
 @router.get("/latest")
@@ -63,9 +70,7 @@ async def get_latest_recommendation(
 
 @router.post("/execute")
 async def execute_recommendation(
-    ticker: str,
-    action: str,
-    percentage: float,
+    request: ExecuteRecommendationRequest,
     portfolio_manager: PortfolioManager = Depends(get_portfolio_manager),
     broker: BrokerService = Depends(get_broker_service),
     db: AsyncSession = Depends(get_db)
@@ -88,8 +93,12 @@ async def execute_recommendation(
         }
     """
     try:
+        # Extract request data
+        ticker = request.ticker
+        action = request.action.upper()
+        percentage = request.percentage
+
         # Validate action
-        action = action.upper()
         if action not in ['BUY', 'SELL', 'HOLD']:
             raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
 

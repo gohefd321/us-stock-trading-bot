@@ -444,13 +444,41 @@ class KISRestAPI:
 
             result = response.json()
 
+            logger.debug(f"Price API Response for {ticker}: {result}")
+
             if result.get("rt_cd") == "0":
                 output = result.get("output", {})
-                # 현재가
-                current_price = float(output.get("last", 0))
-                return current_price if current_price > 0 else None
+
+                # Try multiple possible field names for current price
+                price_str = (
+                    output.get("last") or
+                    output.get("curr_price") or
+                    output.get("price") or
+                    output.get("stck_prpr") or
+                    output.get("base_price") or
+                    "0"
+                )
+
+                logger.debug(f"Raw price string for {ticker}: '{price_str}'")
+
+                # Handle empty string or invalid values
+                if not price_str or price_str.strip() == "":
+                    logger.error(f"Empty price returned for {ticker}. API response: {output}")
+                    return None
+
+                try:
+                    current_price = float(price_str)
+                    if current_price > 0:
+                        logger.info(f"✓ Price for {ticker}: ${current_price}")
+                        return current_price
+                    else:
+                        logger.warning(f"Invalid price (<=0) for {ticker}: {current_price}")
+                        return None
+                except (ValueError, TypeError) as e:
+                    logger.error(f"Failed to convert price '{price_str}' to float for {ticker}: {e}")
+                    return None
             else:
-                logger.error(f"Price API error: {result.get('msg1')}")
+                logger.error(f"Price API error for {ticker}: {result.get('msg1')} (code: {result.get('msg_cd')})")
                 return None
 
         except Exception as e:
