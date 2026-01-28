@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8000"  # Backend URL for CORS
 
     # Trading Parameters
-    initial_capital_krw: int = 1000000
+    initial_capital_usd: float = 1000.0  # Initial capital in USD for US stock trading
+    initial_capital_krw: int = 1000000   # Legacy: Initial capital in KRW (not used for US stocks)
     max_position_size_pct: int = 40
     daily_loss_limit_pct: int = 20
     stop_loss_pct: int = 30

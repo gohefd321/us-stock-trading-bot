@@ -133,6 +133,7 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
         if not risk_param:
             # Default risk parameters
             risk_params = {
+                'initial_capital_usd': settings.initial_capital_usd,
                 'max_positions': 5,
                 'max_position_size_pct': 20.0,
                 'stop_loss_pct': 10.0,
@@ -141,6 +142,7 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
             }
         else:
             risk_params = {
+                'initial_capital_usd': getattr(risk_param, 'initial_capital_usd', settings.initial_capital_usd),
                 'max_positions': risk_param.max_positions,
                 'max_position_size_pct': risk_param.max_position_size_pct,
                 'stop_loss_pct': risk_param.stop_loss_pct,
@@ -165,6 +167,7 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
             "request": request,
             "api_keys": {},
             "risk_params": {
+                'initial_capital_usd': 1000.0,
                 'max_positions': 5,
                 'max_position_size_pct': 20.0,
                 'stop_loss_pct': 10.0,
@@ -321,6 +324,7 @@ async def save_api_keys(
 
 @router.post("/settings/save-risk-params")
 async def save_risk_params(
+    initial_capital_usd: float = Form(...),
     max_positions: int = Form(...),
     max_position_size_pct: float = Form(...),
     stop_loss_pct: float = Form(...),
@@ -331,6 +335,7 @@ async def save_risk_params(
     """Save risk parameters and redirect to settings"""
     try:
         db = services['db']
+        settings = services['settings']
 
         from sqlalchemy import select
         from ..models import RiskParameter
@@ -342,6 +347,7 @@ async def save_risk_params(
 
         if risk_param:
             # Update existing
+            risk_param.initial_capital_usd = initial_capital_usd
             risk_param.max_positions = max_positions
             risk_param.max_position_size_pct = max_position_size_pct
             risk_param.stop_loss_pct = stop_loss_pct
@@ -350,6 +356,7 @@ async def save_risk_params(
         else:
             # Create new
             risk_param = RiskParameter(
+                initial_capital_usd=initial_capital_usd,
                 max_positions=max_positions,
                 max_position_size_pct=max_position_size_pct,
                 stop_loss_pct=stop_loss_pct,
@@ -359,6 +366,30 @@ async def save_risk_params(
             db.add(risk_param)
 
         await db.commit()
+
+        # Update settings in .env file
+        import os
+        from ..config import PROJECT_ROOT
+        env_path = PROJECT_ROOT / '.env'
+
+        if env_path.exists():
+            with open(env_path, 'r') as f:
+                lines = f.readlines()
+        else:
+            lines = []
+
+        # Update INITIAL_CAPITAL_USD
+        found = False
+        for i, line in enumerate(lines):
+            if line.startswith('INITIAL_CAPITAL_USD='):
+                lines[i] = f'INITIAL_CAPITAL_USD={initial_capital_usd}\n'
+                found = True
+                break
+        if not found:
+            lines.append(f'INITIAL_CAPITAL_USD={initial_capital_usd}\n')
+
+        with open(env_path, 'w') as f:
+            f.writelines(lines)
 
         return RedirectResponse(url="/settings?success=리스크 파라미터가 저장되었습니다", status_code=303)
 

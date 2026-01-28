@@ -48,25 +48,25 @@
 <div class="grid">
     <div class="stat-card">
         <h3>총 자산</h3>
-        <div class="value">₩{{ "{:,}".format(portfolio.total_value|int) }}</div>
+        <div class="value">${{ "%.2f"|format(portfolio.total_value) }}</div>
     </div>
     <div class="stat-card">
         <h3>현금 잔고</h3>
-        <div class="value">₩{{ "{:,}".format(portfolio.cash_balance|int) }}</div>
+        <div class="value">${{ "%.2f"|format(portfolio.cash_balance) }}</div>
     </div>
     <div class="stat-card">
         <h3>일일 손익</h3>
         <div class="value {% if portfolio.daily_pnl_pct >= 0 %}positive{% else %}negative{% endif %}">
             {{ "+" if portfolio.daily_pnl_pct >= 0 else "" }}{{ "%.2f"|format(portfolio.daily_pnl_pct) }}%
         </div>
-        <small>₩{{ "{:,}".format(portfolio.daily_pnl|int) }}</small>
+        <small>${{ "%.2f"|format(portfolio.daily_pnl) }}</small>
     </div>
     <div class="stat-card">
         <h3>총 손익</h3>
         <div class="value {% if portfolio.total_pnl_pct >= 0 %}positive{% else %}negative{% endif %}">
             {{ "+" if portfolio.total_pnl_pct >= 0 else "" }}{{ "%.2f"|format(portfolio.total_pnl_pct) }}%
         </div>
-        <small>₩{{ "{:,}".format(portfolio.total_pnl|int) }}</small>
+        <small>${{ "%.2f"|format(portfolio.total_pnl) }}</small>
     </div>
 </div>
 
@@ -92,7 +92,7 @@
                 <td>{{ pos.quantity }}주</td>
                 <td>${{ "%.2f"|format(pos.avg_cost) }}</td>
                 <td>${{ "%.2f"|format(pos.current_price) }}</td>
-                <td>₩{{ "{:,}".format(pos.total_value|int) }}</td>
+                <td>${{ "%.2f"|format(pos.total_value) }}</td>
                 <td class="{% if pos.unrealized_pnl_pct >= 0 %}positive{% else %}negative{% endif %}">
                     {{ "+" if pos.unrealized_pnl_pct >= 0 else "" }}{{ "%.2f"|format(pos.unrealized_pnl_pct) }}%
                 </td>

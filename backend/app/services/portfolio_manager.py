@@ -32,7 +32,8 @@ class PortfolioManager:
         self.broker = broker
         self.db = db
         self.settings = settings or Settings()
-        self.initial_capital = self.settings.initial_capital_krw
+        # Use USD initial capital for US stock trading
+        self.initial_capital = self.settings.initial_capital_usd
 
     async def get_current_state(self) -> Dict:
         """
@@ -41,6 +42,21 @@ class PortfolioManager:
         Returns:
             Dictionary with current portfolio information
         """
+        # Load initial capital from database if available
+        if self.db:
+            try:
+                from ..models import RiskParameter
+                from sqlalchemy import select
+
+                stmt = select(RiskParameter).limit(1)
+                result = await self.db.execute(stmt)
+                risk_param = result.scalar_one_or_none()
+
+                if risk_param and hasattr(risk_param, 'initial_capital_usd'):
+                    self.initial_capital = risk_param.initial_capital_usd
+            except Exception as e:
+                logger.debug(f"Could not load initial capital from DB: {e}")
+
         # Check if broker is initialized
         if not self.broker or not self.broker.broker:
             logger.warning("Broker not initialized. Returning empty portfolio state.")

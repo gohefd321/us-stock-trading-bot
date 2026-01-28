@@ -371,26 +371,44 @@ class KISRestAPI:
                 else:
                     output2 = {}
 
-                logger.debug(f"output2 keys: {list(output2.keys()) if output2 else 'empty'}")
+                if output2:
+                    logger.info(f"output2 available fields: {list(output2.keys())}")
+                else:
+                    logger.warning("output2 is empty, may need separate cash balance inquiry")
 
-                # 예수금 (외화예수금) - 여러 필드명 시도
-                # frcr_buy_amt_smtl1: 외화매수금액합계1 (USD 예수금)
-                # frcr_pchs_amt1: 외화예수금
+                # 예수금 (외화예수금) 조회
+                # 한국투자증권 해외주식 잔고 조회 API는 output2가 비어있을 수 있음
+                # 별도로 해외주식 예수금 조회 API를 호출해야 할 수 있음
                 cash_balance = 0.0
-                for field in ["frcr_buy_amt_smtl1", "frcr_pchs_amt1", "prvs_rcdl_exrt", "dnca_tot_amt"]:
+
+                # Try multiple field names
+                cash_candidates = [
+                    "frcr_buy_amt_smtl1",   # 외화매수금액합계
+                    "frcr_pchs_amt1",        # 외화예수금1
+                    "frcr_evlu_amt2",        # 외화평가금액2
+                    "prvs_rcdl_exrt",        # 전일정산환율
+                    "dnca_tot_amt",          # 예수금총액
+                ]
+
+                for field in cash_candidates:
                     cash_str = output2.get(field, "")
-                    if cash_str:
+                    if cash_str and str(cash_str).strip() and cash_str != "0":
                         try:
-                            cash_balance = float(cash_str)
-                            logger.debug(f"Found cash balance in field '{field}': ${cash_balance}")
-                            break
+                            val = float(cash_str)
+                            if val > 0:
+                                cash_balance = val
+                                logger.info(f"✓ Found cash balance in field '{field}': ${cash_balance:.2f}")
+                                break
                         except (ValueError, TypeError):
                             continue
+
+                if cash_balance == 0:
+                    logger.warning("Cash balance is $0.00 - this may be accurate or may require separate API call")
 
                 # 총 평가금액 계산
                 total_value = cash_balance + holdings_value
 
-                logger.info(f"✓ Balance calculated: Cash=${cash_balance:.2f}, Holdings=${holdings_value:.2f}, Total=${total_value:.2f}")
+                logger.info(f"✓ Balance summary: Cash=${cash_balance:.2f}, Holdings=${holdings_value:.2f}, Total=${total_value:.2f}")
 
                 return {
                     "cash_balance": cash_balance,

@@ -135,6 +135,12 @@
 
     <form method="post" action="/settings/save-risk-params">
         <div style="margin-bottom: 1rem;">
+            <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">초기 자본 (USD)</label>
+            <input type="number" name="initial_capital_usd" value="{{ risk_params.initial_capital_usd }}" min="1" max="1000000" step="0.01" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
+            <small style="color: #666; display: block; margin-top: 0.25rem;">손익률 계산 기준이 되는 초기 자본 (달러 기준)</small>
+        </div>
+
+        <div style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">최대 포지션 수</label>
             <input type="number" name="max_positions" value="{{ risk_params.max_positions }}" min="1" max="20" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
             <small style="color: #666; display: block; margin-top: 0.25rem;">동시에 보유할 수 있는 최대 종목 수</small>
