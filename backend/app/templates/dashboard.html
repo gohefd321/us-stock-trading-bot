@@ -13,6 +13,17 @@
 <div class="alert alert-warning">{{ warning | safe }}</div>
 {% endif %}
 
+<!-- AI 매매 추천 -->
+<div class="card">
+    <h2>🤖 AI 매매 추천</h2>
+    <div id="recommendationsSection">
+        <div style="text-align: center; color: #666; padding: 2rem;">
+            <p>로딩 중...</p>
+        </div>
+    </div>
+    <button onclick="refreshRecommendations()" class="success" style="margin-top: 1rem;">🔄 추천 새로고침</button>
+</div>
+
 <!-- AI 투자 분석 챗봇 -->
 <div class="card">
     <h2>💬 AI 투자 분석</h2>
@@ -98,6 +109,133 @@
 
 {% block scripts %}
 <script>
+    // 페이지 로드 시 추천 불러오기
+    document.addEventListener('DOMContentLoaded', function() {
+        refreshRecommendations();
+        // 5분마다 자동 새로고침
+        setInterval(refreshRecommendations, 5 * 60 * 1000);
+    });
+
+    // AI 추천 새로고침
+    async function refreshRecommendations() {
+        const section = document.getElementById('recommendationsSection');
+        section.innerHTML = '<div style="text-align: center; color: #666; padding: 2rem;"><p>로딩 중...</p></div>';
+
+        try {
+            const response = await fetch('/api/recommendations/latest');
+            if (!response.ok) throw new Error('추천을 불러오지 못했습니다');
+
+            const data = await response.json();
+            displayRecommendations(data);
+        } catch (error) {
+            section.innerHTML = `<div style="text-align: center; color: #dc3545; padding: 2rem;"><p>❌ 오류: ${error.message}</p></div>`;
+        }
+    }
+
+    // 추천 표시
+    function displayRecommendations(data) {
+        const section = document.getElementById('recommendationsSection');
+
+        if (!data.recommendations || data.recommendations.length === 0) {
+            section.innerHTML = `
+                <div style="padding: 1rem; background: #fff3cd; border: 1px solid #ffc107; border-radius: 4px;">
+                    <p style="margin: 0; color: #856404;">${data.summary || '아직 추천이 생성되지 않았습니다.'}</p>
+                    <small style="color: #856404;">다음 추천은 장 시작, 장 중간, 장 마감 시간에 자동 생성됩니다.</small>
+                </div>
+            `;
+            return;
+        }
+
+        // 추천 요약
+        let html = `
+            <div style="padding: 1rem; background: #d4edda; border: 1px solid #28a745; border-radius: 4px; margin-bottom: 1rem;">
+                <p style="margin: 0; color: #155724; font-weight: 500;">📊 ${data.market_phase || '일반'} 분석</p>
+                <p style="margin: 0.5rem 0 0 0; color: #155724;">${data.summary || ''}</p>
+                <small style="color: #155724;">생성 시각: ${new Date(data.timestamp).toLocaleString('ko-KR')}</small>
+            </div>
+        `;
+
+        // 추천 목록
+        html += '<div style="display: flex; flex-direction: column; gap: 1rem;">';
+
+        data.recommendations.forEach((rec, idx) => {
+            const actionColor = rec.action === 'BUY' ? '#28a745' : rec.action === 'SELL' ? '#dc3545' : '#6c757d';
+            const actionEmoji = rec.action === 'BUY' ? '📈' : rec.action === 'SELL' ? '📉' : '⏸️';
+
+            html += `
+                <div style="border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: white;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                        <div>
+                            <h3 style="margin: 0; font-size: 1.25rem; color: ${actionColor};">
+                                ${actionEmoji} ${rec.action} ${rec.ticker}
+                            </h3>
+                            <p style="margin: 0.25rem 0 0 0; color: #666; font-size: 0.9rem;">
+                                ${rec.rationale || ''}
+                            </p>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.1rem; font-weight: bold; color: ${actionColor};">
+                                ${rec.percentage}%
+                            </div>
+                            <small style="color: #666;">신뢰도: ${rec.confidence}%</small>
+                        </div>
+                    </div>
+                    ${rec.action !== 'HOLD' ? `
+                    <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                        <button onclick="executeRecommendation('${rec.ticker}', '${rec.action}', ${rec.percentage})"
+                                class="success" style="flex: 1; padding: 0.5rem;">
+                            ✅ 승인 및 실행
+                        </button>
+                        <button onclick="alert('추천이 무시되었습니다')"
+                                class="danger" style="flex: 1; padding: 0.5rem;">
+                            ❌ 무시
+                        </button>
+                    </div>
+                    ` : ''}
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        section.innerHTML = html;
+    }
+
+    // 추천 실행
+    async function executeRecommendation(ticker, action, percentage) {
+        if (!confirm(`${action} ${ticker} (${percentage}%)를 실행하시겠습니까?`)) {
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/recommendations/execute', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    ticker: ticker,
+                    action: action,
+                    percentage: percentage
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || '실행 실패');
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                alert(`✅ ${result.message}`);
+                // 포트폴리오 새로고침
+                location.reload();
+            } else {
+                alert(`❌ 실패: ${result.message}`);
+            }
+        } catch (error) {
+            alert(`❌ 오류: ${error.message}`);
+        }
+    }
+
     // 챗봇 메시지 전송
     async function sendMessage() {
         const input = document.getElementById('chatInput');

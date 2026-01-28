@@ -18,6 +18,7 @@ from .services.risk_manager import RiskManager
 from .services.gemini_service import GeminiService
 from .services.trading_engine import TradingEngine
 from .services.scheduler_service import SchedulerService
+from .services.market_data_scheduler import MarketDataScheduler
 from .gemini_functions.function_handlers import FunctionHandler
 
 # Global service instances (initialized on startup)
@@ -29,6 +30,7 @@ _gemini_service = None
 _function_handler = None
 _trading_engine = None
 _scheduler_service = None
+_market_data_scheduler = None
 _settings = None
 
 
@@ -149,3 +151,12 @@ async def get_scheduler_service() -> SchedulerService:
         # Scheduler requires trading engine
         pass
     return _scheduler_service
+
+
+async def get_market_data_scheduler() -> MarketDataScheduler:
+    """Get market data scheduler instance"""
+    global _market_data_scheduler
+    if _market_data_scheduler is None:
+        settings = await get_settings()
+        _market_data_scheduler = MarketDataScheduler(settings)
+    return _market_data_scheduler

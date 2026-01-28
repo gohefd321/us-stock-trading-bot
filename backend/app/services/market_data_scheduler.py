@@ -1,6 +1,6 @@
 """
 Market Data Scheduler
-Automatically collects market data at regular intervals
+Automatically collects market data and generates trading recommendations at market phases
 """
 
 import logging
@@ -10,54 +10,95 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from .market_data_service import MarketDataService
+from .trading_recommendation_service import TradingRecommendationService
 from ..config import Settings
 
 logger = logging.getLogger(__name__)
 
 
 class MarketDataScheduler:
-    """Scheduler for automatic market data collection"""
+    """Scheduler for automatic market data collection and trading recommendations"""
 
     def __init__(self, settings: Settings):
         self.settings = settings
         self.market_data_service = MarketDataService(settings)
+        self.recommendation_service = TradingRecommendationService(settings, self.market_data_service)
         self.scheduler = AsyncIOScheduler()
         self.is_running = False
+        self.latest_recommendation = None  # Store latest recommendation
 
     def start(self):
-        """Start the scheduler"""
+        """Start the scheduler with market phase-based collection"""
         if self.is_running:
             logger.warning("[SCHEDULER] 📅 Market data scheduler already running")
             return
 
-        logger.info("[SCHEDULER] 🚀 Starting market data scheduler...")
+        logger.info("[SCHEDULER] 🚀 Starting enhanced market data scheduler...")
 
-        # Collect market data every 30 minutes during market hours (9:30 AM - 4:00 PM EST)
-        # In UTC: 14:30 - 21:00 (standard time) or 13:30 - 20:00 (daylight saving)
+        # 1. Server startup - collect data immediately
         self.scheduler.add_job(
-            self._collect_market_data,
+            lambda: asyncio.create_task(self._collect_with_recommendation('startup')),
+            'date',
+            run_date=datetime.now(),
+            id='startup_collection',
+            name='Startup Collection'
+        )
+
+        # 2. Market open (9:30 AM EST = 14:30 UTC standard time)
+        self.scheduler.add_job(
+            lambda: asyncio.create_task(self._collect_with_recommendation('market_open')),
             CronTrigger(
-                day_of_week='mon-fri',  # Weekdays only
-                hour='14-21',  # Market hours in UTC (approximate)
-                minute='*/30'  # Every 30 minutes
+                day_of_week='mon-fri',
+                hour=14,
+                minute=30
             ),
-            id='market_data_collection',
-            name='Market Data Collection',
+            id='market_open_collection',
+            name='Market Open Collection',
             replace_existing=True
         )
 
-        # Also run once at startup
+        # 3. Mid-session (12:30 PM EST = 17:30 UTC)
+        self.scheduler.add_job(
+            lambda: asyncio.create_task(self._collect_with_recommendation('mid_session')),
+            CronTrigger(
+                day_of_week='mon-fri',
+                hour=17,
+                minute=30
+            ),
+            id='mid_session_collection',
+            name='Mid-Session Collection',
+            replace_existing=True
+        )
+
+        # 4. Near market close (3:30 PM EST = 20:30 UTC)
+        self.scheduler.add_job(
+            lambda: asyncio.create_task(self._collect_with_recommendation('market_close')),
+            CronTrigger(
+                day_of_week='mon-fri',
+                hour=20,
+                minute=30
+            ),
+            id='market_close_collection',
+            name='Market Close Collection',
+            replace_existing=True
+        )
+
+        # 5. General data collection every 30 minutes during market hours
         self.scheduler.add_job(
             self._collect_market_data,
-            'date',
-            run_date=datetime.now(),
-            id='market_data_startup',
-            name='Market Data Startup Collection'
+            CronTrigger(
+                day_of_week='mon-fri',
+                hour='14-21',
+                minute='0,30'
+            ),
+            id='general_collection',
+            name='General Data Collection',
+            replace_existing=True
         )
 
         self.scheduler.start()
         self.is_running = True
-        logger.info("[SCHEDULER] ✅ Market data scheduler started")
+        logger.info("[SCHEDULER] ✅ Enhanced market data scheduler started with 4 market phases")
 
     def stop(self):
         """Stop the scheduler"""
@@ -81,7 +122,7 @@ class MarketDataScheduler:
             trending_count = len(summary.get('wsb_trending', []))
             detailed_count = len(summary.get('detailed_stocks', []))
 
-            logger.info(f"[SCHEDULER] ✅ Market data collected: {trending_count} WSB stocks, {detailed_count} detailed")
+            logger.info(f"[SCHEDULER] ✅ Market data collected: {trending_count} stocks, {detailed_count} detailed")
 
             # Log summary
             if summary.get('summary_text'):
@@ -89,6 +130,62 @@ class MarketDataScheduler:
 
         except Exception as e:
             logger.error(f"[SCHEDULER] 💥 Failed to collect market data: {e}", exc_info=True)
+
+    async def _collect_with_recommendation(self, market_phase: str):
+        """Collect market data and generate trading recommendations"""
+        try:
+            logger.info(f"[SCHEDULER] 🎯 Starting {market_phase} collection with recommendations...")
+
+            # Collect market data
+            await self._collect_market_data()
+
+            # Get market summary
+            market_summary = await self.market_data_service.get_market_summary()
+
+            # Get portfolio state (we'll need to inject this from main.py)
+            # For now, use minimal portfolio state
+            from ..dependencies import get_portfolio_manager
+            portfolio_manager = get_portfolio_manager()
+
+            if portfolio_manager:
+                portfolio_state = await portfolio_manager.get_current_state()
+            else:
+                portfolio_state = {
+                    'total_value': 0,
+                    'cash_balance': 0,
+                    'daily_pnl_pct': 0,
+                    'total_pnl_pct': 0,
+                    'position_count': 0,
+                    'positions': []
+                }
+
+            # Generate recommendations
+            logger.info(f"[SCHEDULER] 🤖 Generating AI recommendations for {market_phase}...")
+            recommendations = await self.recommendation_service.generate_trading_recommendations(
+                portfolio_state,
+                market_summary,
+                market_phase
+            )
+
+            # Store latest recommendation
+            self.latest_recommendation = recommendations
+
+            logger.info(f"[SCHEDULER] ✅ {market_phase} complete: {len(recommendations.get('recommendations', []))} recommendations generated")
+
+            # Log recommendations summary
+            if recommendations.get('summary'):
+                logger.info(f"[SCHEDULER] 💡 Recommendations: {recommendations['summary'][:200]}...")
+
+        except Exception as e:
+            logger.error(f"[SCHEDULER] 💥 Failed {market_phase} collection: {e}", exc_info=True)
+
+    def get_latest_recommendation(self) -> dict:
+        """Get the latest trading recommendation"""
+        return self.latest_recommendation or {
+            'recommendations': [],
+            'summary': '아직 추천이 생성되지 않았습니다.',
+            'timestamp': datetime.now().isoformat()
+        }
 
     def get_status(self) -> dict:
         """Get scheduler status"""

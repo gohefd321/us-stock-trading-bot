@@ -12,7 +12,7 @@ import asyncio
 from .config import settings
 from .database import init_db
 from .utils.logging_config import setup_logging
-from .dependencies import init_services, get_broker_service
+from .dependencies import init_services, get_broker_service, get_market_data_scheduler
 from .routes import (
     scheduler_router,
     trading_router,
@@ -22,6 +22,7 @@ from .routes import (
 )
 from .routes.web import router as web_router
 from .routes.chat import router as chat_router
+from .routes.recommendations import router as recommendations_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -57,6 +58,7 @@ app.include_router(trading_router)
 app.include_router(portfolio_router)
 app.include_router(signals_router)
 app.include_router(settings_router)
+app.include_router(recommendations_router)  # AI recommendations routes
 
 
 async def token_refresh_loop():
@@ -116,10 +118,9 @@ async def startup_event():
 
     # Start market data scheduler
     try:
-        from .services.market_data_scheduler import MarketDataScheduler
-        _market_data_scheduler = MarketDataScheduler(settings)
+        _market_data_scheduler = await get_market_data_scheduler()
         _market_data_scheduler.start()
-        logger.info("Started market data scheduler (every 30 minutes)")
+        logger.info("Started market data scheduler with AI recommendations")
     except Exception as e:
         logger.error(f"Failed to start market data scheduler: {e}")
         # Continue without market data scheduler
