@@ -461,39 +461,38 @@ class KISRestAPI:
 
             result = response.json()
 
-            logger.debug(f"Price API Response for {ticker}: {result}")
+            logger.debug(f"Price API rt_cd={result.get('rt_cd')}, msg_cd={result.get('msg_cd')}")
 
             if result.get("rt_cd") == "0":
                 output = result.get("output", {})
 
+                # 한국투자증권 해외주식 현재가 API 필드명
+                # last: 현재가 (실시간 체결가)
+                # base: 기준가
                 # Try multiple possible field names for current price
-                price_str = (
-                    output.get("last") or
-                    output.get("curr_price") or
-                    output.get("price") or
-                    output.get("stck_prpr") or
-                    output.get("base_price") or
-                    "0"
-                )
+                price_candidates = [
+                    ("last", output.get("last")),
+                    ("base", output.get("base")),
+                    ("curr_price", output.get("curr_price")),
+                    ("stck_prpr", output.get("stck_prpr"))
+                ]
 
-                logger.debug(f"Raw price string for {ticker}: '{price_str}'")
+                current_price = None
+                for field_name, price_str in price_candidates:
+                    if price_str and str(price_str).strip():
+                        try:
+                            price_val = float(price_str)
+                            if price_val > 0:
+                                current_price = price_val
+                                logger.info(f"✓ Price for {ticker} from field '{field_name}': ${current_price}")
+                                return current_price
+                        except (ValueError, TypeError):
+                            continue
 
-                # Handle empty string or invalid values
-                if not price_str or price_str.strip() == "":
-                    logger.error(f"Empty price returned for {ticker}. API response: {output}")
-                    return None
-
-                try:
-                    current_price = float(price_str)
-                    if current_price > 0:
-                        logger.info(f"✓ Price for {ticker}: ${current_price}")
-                        return current_price
-                    else:
-                        logger.warning(f"Invalid price (<=0) for {ticker}: {current_price}")
-                        return None
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Failed to convert price '{price_str}' to float for {ticker}: {e}")
-                    return None
+                # No valid price found
+                logger.error(f"No valid price found for {ticker}. Available fields: {list(output.keys())[:10]}")
+                logger.debug(f"Full output: {output}")
+                return None
             else:
                 logger.error(f"Price API error for {ticker}: {result.get('msg1')} (code: {result.get('msg_cd')})")
                 return None
