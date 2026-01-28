@@ -25,34 +25,6 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter()
 
 
-# Simple scheduler status holder (since SchedulerService requires TradingEngine)
-class SchedulerStatus:
-    """Simple scheduler status for web UI"""
-    def __init__(self):
-        self.is_running = False
-        self.job_count = 0
-
-    def get_status(self):
-        return {
-            'is_running': self.is_running,
-            'job_count': self.job_count
-        }
-
-    def start(self):
-        logger.info("Scheduler start requested")
-        self.is_running = True
-        return True
-
-    def stop(self):
-        logger.info("Scheduler stop requested")
-        self.is_running = False
-        return True
-
-
-# Global scheduler status
-_scheduler_status = SchedulerStatus()
-
-
 # Dependency: Get services
 async def get_services(db: AsyncSession = Depends(get_db)):
     """Get initialized services"""
@@ -65,7 +37,6 @@ async def get_services(db: AsyncSession = Depends(get_db)):
         'settings': settings,
         'broker': broker,
         'portfolio': portfolio,
-        'scheduler': _scheduler_status,
         'encryption': encryption,
         'db': db
     }
@@ -78,13 +49,9 @@ async def dashboard(request: Request, services: dict = Depends(get_services)):
         # Get portfolio state
         portfolio_state = await services['portfolio'].get_current_state()
 
-        # Get scheduler status
-        scheduler_status = services['scheduler'].get_status()
-
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "portfolio": portfolio_state,
-            "scheduler": scheduler_status,
             "error": portfolio_state.get('error'),
             "warning": portfolio_state.get('warning')
         })
@@ -102,10 +69,6 @@ async def dashboard(request: Request, services: dict = Depends(get_services)):
                 'daily_pnl_pct': 0,
                 'total_pnl': 0,
                 'total_pnl_pct': 0
-            },
-            "scheduler": {
-                'is_running': False,
-                'job_count': 0
             },
             "error": str(e)
         })
@@ -184,30 +147,6 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
             "paper_mode": True,
             "error": str(e)
         })
-
-
-@router.post("/scheduler/start")
-async def start_scheduler(services: dict = Depends(get_services)):
-    """Start scheduler and redirect to dashboard"""
-    try:
-        scheduler = services['scheduler']
-        scheduler.start()
-        return RedirectResponse(url="/?success=스케줄러가 시작되었습니다", status_code=303)
-    except Exception as e:
-        logger.error(f"Failed to start scheduler: {e}")
-        return RedirectResponse(url=f"/?error=스케줄러 시작 실패: {str(e)}", status_code=303)
-
-
-@router.post("/scheduler/stop")
-async def stop_scheduler(services: dict = Depends(get_services)):
-    """Stop scheduler and redirect to dashboard"""
-    try:
-        scheduler = services['scheduler']
-        scheduler.stop()
-        return RedirectResponse(url="/?success=스케줄러가 중지되었습니다", status_code=303)
-    except Exception as e:
-        logger.error(f"Failed to stop scheduler: {e}")
-        return RedirectResponse(url=f"/?error=스케줄러 중지 실패: {str(e)}", status_code=303)
 
 
 @router.post("/settings/save-keys")

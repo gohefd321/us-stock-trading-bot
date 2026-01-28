@@ -13,26 +13,22 @@
 <div class="alert alert-warning">{{ warning }}</div>
 {% endif %}
 
-<!-- 스케줄러 제어 -->
+<!-- AI 투자 분석 챗봇 -->
 <div class="card">
-    <div class="flex">
-        <div>
-            <h2>자동 거래 스케줄러</h2>
-            <span class="badge {% if scheduler.is_running %}badge-success{% else %}badge-default{% endif %}">
-                {% if scheduler.is_running %}실행 중{% else %}중지됨{% endif %}
-            </span>
-            <p style="margin-top: 0.5rem; color: #666;">예정된 작업: {{ scheduler.job_count }}개</p>
+    <h2>💬 AI 투자 분석</h2>
+    <div style="display: flex; flex-direction: column; gap: 1rem;">
+        <!-- 챗봇 대화창 -->
+        <div id="chatMessages" style="min-height: 300px; max-height: 500px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 1rem; background: #f8f9fa;">
+            <div style="text-align: center; color: #666; padding: 2rem;">
+                <p>💡 AI 투자 분석 도우미에게 질문해보세요</p>
+                <small>예시: "현재 포트폴리오 분석해줘", "이번 주 시장 동향은?", "추천 종목 알려줘"</small>
+            </div>
         </div>
-        <div>
-            {% if scheduler.is_running %}
-            <form method="post" action="/scheduler/stop" style="display: inline;">
-                <button type="submit" class="danger">중지</button>
-            </form>
-            {% else %}
-            <form method="post" action="/scheduler/start" style="display: inline;">
-                <button type="submit" class="success">시작</button>
-            </form>
-            {% endif %}
+
+        <!-- 입력창 -->
+        <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="chatInput" placeholder="질문을 입력하세요..." style="flex: 1; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;" onkeypress="if(event.key==='Enter') sendMessage()">
+            <button onclick="sendMessage()" class="success" style="padding: 0.75rem 2rem;">전송</button>
         </div>
     </div>
 </div>
@@ -62,13 +58,6 @@
         <small>₩{{ "{:,}".format(portfolio.total_pnl|int) }}</small>
     </div>
 </div>
-
-<!-- 위험 경고 -->
-{% if portfolio.daily_pnl_pct <= -15 %}
-<div class="alert alert-warning">
-    ⚠️ 일일 손실률이 -15%를 초과했습니다. -20%에 도달하면 서킷브레이커가 발동됩니다.
-</div>
-{% endif %}
 
 <!-- 보유 포지션 -->
 <div class="card">
@@ -109,7 +98,89 @@
 
 {% block scripts %}
 <script>
-    // 30초마다 자동 새로고침
-    setTimeout(() => location.reload(), 30000);
+    // 챗봇 메시지 전송
+    async function sendMessage() {
+        const input = document.getElementById('chatInput');
+        const messagesDiv = document.getElementById('chatMessages');
+        const message = input.value.trim();
+
+        if (!message) return;
+
+        // 초기 안내 메시지 제거
+        if (messagesDiv.children.length === 1 && messagesDiv.children[0].style.textAlign === 'center') {
+            messagesDiv.innerHTML = '';
+        }
+
+        // 사용자 메시지 추가
+        addMessage('user', message);
+        input.value = '';
+
+        // 로딩 표시
+        const loadingId = 'loading-' + Date.now();
+        addMessage('assistant', '분석 중...', loadingId);
+
+        try {
+            // API 호출
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: message})
+            });
+
+            const data = await response.json();
+
+            // 로딩 메시지 제거
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+
+            // AI 응답 추가
+            if (data.response) {
+                addMessage('assistant', data.response);
+            } else {
+                addMessage('assistant', '❌ 오류: ' + (data.error || '응답을 받지 못했습니다'));
+            }
+        } catch (error) {
+            // 로딩 메시지 제거
+            const loadingMsg = document.getElementById(loadingId);
+            if (loadingMsg) loadingMsg.remove();
+
+            addMessage('assistant', '❌ 네트워크 오류: ' + error.message);
+        }
+
+        // 스크롤을 맨 아래로
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addMessage(role, content, id = null) {
+        const messagesDiv = document.getElementById('chatMessages');
+        const messageDiv = document.createElement('div');
+        if (id) messageDiv.id = id;
+
+        messageDiv.style.cssText = `
+            margin-bottom: 1rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            ${role === 'user'
+                ? 'background: #007bff; color: white; margin-left: 20%; text-align: right;'
+                : 'background: white; border: 1px solid #ddd; margin-right: 20%;'
+            }
+        `;
+
+        messageDiv.innerHTML = `
+            <div style="font-size: 0.85rem; opacity: 0.8; margin-bottom: 0.25rem;">
+                ${role === 'user' ? '👤 나' : '🤖 AI 분석'}
+            </div>
+            <div style="white-space: pre-wrap; line-height: 1.5;">${content}</div>
+        `;
+
+        messagesDiv.appendChild(messageDiv);
+    }
+
+    // 엔터 키로 전송
+    document.getElementById('chatInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            sendMessage();
+        }
+    });
 </script>
 {% endblock %}
