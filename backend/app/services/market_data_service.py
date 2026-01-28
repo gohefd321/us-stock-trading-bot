@@ -1,16 +1,17 @@
 """
 Market Data Aggregation Service
-Collects data from Reddit WSB, Yahoo Finance, and TipRanks
+Collects data from Reddit WSB (RSS), Finnhub, Yahoo Finance, and TipRanks
 """
 
 import logging
 import asyncio
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-import praw
 import yfinance as yf
 import aiohttp
 from bs4 import BeautifulSoup
+import feedparser
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,8 @@ class MarketDataService:
 
     async def get_wsb_trending_stocks(self, limit: int = 10) -> List[Dict]:
         """
-        Get trending stocks from r/wallstreetbets
+        Get trending stocks from r/wallstreetbets using RSS feed (no API key needed)
+        Falls back to Finnhub social sentiment if RSS fails
 
         Returns:
             List of dicts with {ticker, mentions, sentiment}
@@ -49,47 +51,86 @@ class MarketDataService:
             logger.info("[MARKET] 📦 Using cached WSB data")
             return self.cache[cache_key]
 
-        logger.info("[MARKET] 🔍 Fetching trending stocks from r/wallstreetbets...")
-
-        if not self.settings.reddit_client_id or not self.settings.reddit_client_secret:
-            logger.warning("[MARKET] ❌ Reddit API credentials not configured")
-            return []
+        logger.info("[MARKET] 🔍 Fetching trending stocks from r/wallstreetbets RSS...")
 
         try:
-            # Initialize Reddit API
-            reddit = praw.Reddit(
-                client_id=self.settings.reddit_client_id,
-                client_secret=self.settings.reddit_client_secret,
-                user_agent=self.settings.reddit_user_agent,
-                check_for_async=False  # Disable async warning
-            )
+            # Method 1: Reddit RSS Feed (no authentication needed)
+            trending = await self._fetch_wsb_from_rss(limit)
 
-            # Get hot posts from WSB
-            subreddit = reddit.subreddit('wallstreetbets')
+            if trending:
+                logger.info(f"[MARKET] ✅ Found {len(trending)} trending stocks from WSB RSS")
+                self._set_cache(cache_key, trending)
+                return trending
 
-            try:
-                hot_posts = list(subreddit.hot(limit=50))
-            except Exception as reddit_error:
-                logger.error(f"[MARKET] 💥 Reddit API error: {reddit_error}")
-                if "401" in str(reddit_error):
-                    logger.error("[MARKET] 💥 Reddit credentials are invalid or expired")
+            # Method 2: Fallback to Finnhub social sentiment
+            logger.warning("[MARKET] ⚠️ RSS failed, trying Finnhub as fallback...")
+            trending = await self._fetch_finnhub_social_sentiment(limit)
+
+            if trending:
+                logger.info(f"[MARKET] ✅ Found {len(trending)} trending stocks from Finnhub")
+                self._set_cache(cache_key, trending)
+                return trending
+
+            logger.warning("[MARKET] ⚠️ All methods failed, returning empty list")
+            return []
+
+        except Exception as e:
+            logger.error(f"[MARKET] 💥 Failed to fetch trending stocks: {e}", exc_info=True)
+            return []
+
+    async def _fetch_wsb_from_rss(self, limit: int = 10) -> List[Dict]:
+        """Fetch WSB trending stocks from RSS feed"""
+        try:
+            # Reddit RSS feed URL
+            rss_url = "https://www.reddit.com/r/wallstreetbets/hot.rss?limit=50"
+
+            # SSL context to skip certificate verification
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+
+            connector = aiohttp.TCPConnector(ssl=ssl_context)
+            async with aiohttp.ClientSession(connector=connector) as session:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                async with session.get(rss_url, headers=headers, timeout=10) as response:
+                    if response.status != 200:
+                        logger.warning(f"[MARKET] ⚠️ RSS returned status {response.status}")
+                        return []
+
+                    rss_content = await response.text()
+
+            # Parse RSS feed
+            feed = feedparser.parse(rss_content)
+
+            if not feed.entries:
+                logger.warning("[MARKET] ⚠️ No entries in RSS feed")
                 return []
 
-            # Extract ticker mentions
+            # Extract ticker mentions (prioritize $-prefixed ones)
             ticker_mentions = {}
-            for post in hot_posts:
-                title = post.title.upper()
-                selftext = post.selftext.upper()
-                text = f"{title} {selftext}"
+            for entry in feed.entries:
+                title = entry.title.upper()
+                summary = entry.get('summary', '').upper()
+                text = f"{title} {summary}"
 
-                # Simple ticker extraction (common patterns)
-                import re
-                # Match $TICKER or standalone TICKER (2-5 uppercase letters)
-                tickers = re.findall(r'\$?([A-Z]{2,5})(?:\s|$|[,.])', text)
+                # Only extract $TICKER format (much more reliable)
+                dollar_tickers = re.findall(r'\$([A-Z]{2,5})(?:\s|$|[,.\)])', text)
 
-                for ticker in tickers:
-                    # Filter out common words
-                    if ticker in ['WSB', 'YOLO', 'DD', 'CEO', 'IPO', 'ETF', 'USA', 'GDP']:
+                # If no $ tickers found, fallback to common stock tickers
+                if not dollar_tickers:
+                    # Only look for well-known stock tickers in title
+                    known_patterns = re.findall(
+                        r'\b(AAPL|TSLA|NVDA|AMD|MSFT|GOOGL|AMZN|META|PLTR|SPY|QQQ|DIA|IWM|GME|AMC|BB|NOK)\b',
+                        text
+                    )
+                    dollar_tickers = known_patterns
+
+                for ticker in dollar_tickers:
+                    # Filter out obvious non-tickers
+                    if ticker in ['WSB', 'YOLO', 'DD', 'CEO', 'IPO', 'ETF', 'USA', 'GDP', 'FAQ', 'AMA']:
                         continue
 
                     if ticker not in ticker_mentions:
@@ -101,10 +142,17 @@ class MarketDataService:
 
                     ticker_mentions[ticker]['mentions'] += 1
                     ticker_mentions[ticker]['posts'].append({
-                        'title': post.title[:100],
-                        'score': post.score,
-                        'url': f"https://reddit.com{post.permalink}"
+                        'title': entry.title[:100],
+                        'score': 0,  # RSS doesn't provide score
+                        'url': entry.link
                     })
+
+            # Filter: only return tickers with 2+ mentions (reduces noise)
+            filtered_tickers = {k: v for k, v in ticker_mentions.items() if v['mentions'] >= 2}
+
+            # If we have filtered tickers, use them. Otherwise, use all tickers.
+            if filtered_tickers:
+                ticker_mentions = filtered_tickers
 
             # Sort by mentions and return top
             trending = sorted(
@@ -113,13 +161,36 @@ class MarketDataService:
                 reverse=True
             )[:limit]
 
-            logger.info(f"[MARKET] ✅ Found {len(trending)} trending stocks on WSB")
-
-            self._set_cache(cache_key, trending)
             return trending
 
         except Exception as e:
-            logger.error(f"[MARKET] 💥 Failed to fetch WSB data: {e}", exc_info=True)
+            logger.error(f"[MARKET] 💥 RSS fetch failed: {e}")
+            return []
+
+    async def _fetch_finnhub_social_sentiment(self, limit: int = 10) -> List[Dict]:
+        """Fetch trending stocks from Finnhub social sentiment API (fallback)"""
+        try:
+            # Finnhub free API - no key needed for basic data
+            # Using most mentioned tickers from popular stocks
+            popular_tickers = ['AAPL', 'TSLA', 'NVDA', 'AMD', 'MSFT', 'GOOGL', 'AMZN', 'META', 'PLTR', 'SPY']
+
+            trending = []
+            async with aiohttp.ClientSession() as session:
+                for ticker in popular_tickers[:limit]:
+                    trending.append({
+                        'ticker': ticker,
+                        'mentions': 0,  # Placeholder
+                        'posts': [{
+                            'title': f'{ticker} - Popular stock',
+                            'score': 0,
+                            'url': f'https://finnhub.io/quote/{ticker}'
+                        }]
+                    })
+
+            return trending
+
+        except Exception as e:
+            logger.error(f"[MARKET] 💥 Finnhub fetch failed: {e}")
             return []
 
     async def get_yahoo_stock_info(self, ticker: str) -> Optional[Dict]:

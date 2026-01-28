@@ -13,7 +13,8 @@ cryptography==43.0.3
 
 # Market Data & Signal Sources
 yfinance==0.2.48
-praw==7.8.1  # Reddit API
+praw==7.8.1  # Reddit API (optional - RSS feed used by default)
+feedparser==6.0.12  # RSS feed parser
 beautifulsoup4==4.12.3
 aiohttp==3.10.10
 requests==2.32.3
