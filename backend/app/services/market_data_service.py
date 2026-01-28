@@ -60,12 +60,20 @@ class MarketDataService:
             reddit = praw.Reddit(
                 client_id=self.settings.reddit_client_id,
                 client_secret=self.settings.reddit_client_secret,
-                user_agent=self.settings.reddit_user_agent
+                user_agent=self.settings.reddit_user_agent,
+                check_for_async=False  # Disable async warning
             )
 
             # Get hot posts from WSB
             subreddit = reddit.subreddit('wallstreetbets')
-            hot_posts = list(subreddit.hot(limit=50))
+
+            try:
+                hot_posts = list(subreddit.hot(limit=50))
+            except Exception as reddit_error:
+                logger.error(f"[MARKET] 💥 Reddit API error: {reddit_error}")
+                if "401" in str(reddit_error):
+                    logger.error("[MARKET] 💥 Reddit credentials are invalid or expired")
+                return []
 
             # Extract ticker mentions
             ticker_mentions = {}

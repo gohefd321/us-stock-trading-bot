@@ -67,6 +67,18 @@
 
         <h3 style="font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-top: 2rem;">Reddit API (WSB 스크래핑)</h3>
 
+        <div style="padding: 1rem; background: #e7f3ff; border: 1px solid #0066cc; border-radius: 4px; margin-bottom: 1rem;">
+            <p style="margin: 0 0 0.5rem 0; color: #0066cc; font-weight: 500;">📘 Reddit API 키 발급 방법:</p>
+            <ol style="margin: 0; padding-left: 1.5rem; color: #333; font-size: 0.9rem;">
+                <li><a href="https://www.reddit.com/prefs/apps" target="_blank" style="color: #0066cc;">https://www.reddit.com/prefs/apps</a> 접속</li>
+                <li>"create another app..." 클릭</li>
+                <li>앱 타입: "script" 선택</li>
+                <li>이름: 원하는 이름 입력 (예: TradingBot)</li>
+                <li>redirect uri: http://localhost:8000</li>
+                <li>Client ID와 Secret 복사하여 아래에 입력</li>
+            </ol>
+        </div>
+
         <div style="margin-bottom: 1rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Reddit Client ID</label>
             <input type="text" name="reddit_client_id" value="{{ api_keys.get('reddit_client_id', '') }}" placeholder="Reddit Client ID 입력" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
@@ -80,7 +92,7 @@
         <div style="margin-bottom: 1.5rem;">
             <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">Reddit User Agent</label>
             <input type="text" name="reddit_user_agent" value="{{ api_keys.get('reddit_user_agent', '') }}" placeholder="예: MyTradingBot/1.0" style="width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.95rem;">
-            <small style="color: #666; display: block; margin-top: 0.25rem;">WallStreetBets 시그널 수집에 사용됩니다</small>
+            <small style="color: #666; display: block; margin-top: 0.25rem;">WallStreetBets 트렌딩 종목 수집에 사용됩니다</small>
         </div>
 
         <button type="submit" class="success">저장</button>

@@ -49,11 +49,22 @@ async def dashboard(request: Request, services: dict = Depends(get_services)):
         # Get portfolio state
         portfolio_state = await services['portfolio'].get_current_state()
 
+        # Check if Reddit API credentials are configured
+        settings = services['settings']
+        warning = portfolio_state.get('warning')
+
+        if not settings.reddit_client_id or not settings.reddit_client_secret:
+            reddit_warning = "⚠️ Reddit API 인증 정보가 설정되지 않았습니다. WallStreetBets 트렌딩 종목 정보를 받으려면 <a href='/settings' style='color: #007bff; text-decoration: underline;'>설정 페이지</a>에서 Reddit API 키를 입력해주세요."
+            warning = f"{warning}<br>{reddit_warning}" if warning else reddit_warning
+        elif settings.reddit_client_id == "your_reddit_client_id" or settings.reddit_client_secret == "your_reddit_client_secret":
+            reddit_warning = "⚠️ Reddit API 인증 정보가 유효하지 않습니다 (플레이스홀더 값). <a href='/settings' style='color: #007bff; text-decoration: underline;'>설정 페이지</a>에서 실제 Reddit API 키를 입력해주세요."
+            warning = f"{warning}<br>{reddit_warning}" if warning else reddit_warning
+
         return templates.TemplateResponse("dashboard.html", {
             "request": request,
             "portfolio": portfolio_state,
             "error": portfolio_state.get('error'),
-            "warning": portfolio_state.get('warning')
+            "warning": warning
         })
 
     except Exception as e:
