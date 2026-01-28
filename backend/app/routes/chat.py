@@ -122,8 +122,20 @@ async def chat_endpoint(
         return ChatResponse(response=response.text)
 
     except Exception as e:
+        error_msg = f"오류가 발생했습니다: {str(e)}"
         logger.error(f"Chat endpoint error: {e}", exc_info=True)
-        return ChatResponse(
-            response="",
-            error=f"오류가 발생했습니다: {str(e)}"
-        )
+
+        # Return proper JSON even on error
+        try:
+            return ChatResponse(
+                response="",
+                error=error_msg
+            )
+        except Exception as json_error:
+            logger.error(f"Failed to create error response: {json_error}")
+            # Fallback to manual JSON
+            from fastapi.responses import JSONResponse
+            return JSONResponse(
+                status_code=500,
+                content={"response": "", "error": error_msg}
+            )
