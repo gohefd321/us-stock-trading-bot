@@ -70,7 +70,7 @@ async def chat_endpoint(
 
         # Gemini 설정
         genai.configure(api_key=settings.gemini_api_key)
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-3-pro-preview')
 
         # 컨텍스트 구성
         context = f"""
