@@ -284,5 +284,32 @@ class BrokerService:
             logger.error(f"Failed to fetch positions: {e}")
             return []
 
+    # Alias methods for backward compatibility with api_test.py
+    async def get_current_price(self, ticker: str, exchange: str = "NASD") -> Optional[float]:
+        """Alias for get_us_stock_price"""
+        return await self.get_us_stock_price(ticker, exchange)
+
+    async def place_order(
+        self,
+        ticker: str,
+        quantity: int,
+        side: str,
+        order_type: str = "market",
+        price: Optional[float] = None
+    ) -> Dict:
+        """
+        Alias for place_us_order with different parameter naming
+
+        Args:
+            ticker: Stock ticker symbol
+            quantity: Number of shares
+            side: 'buy' or 'sell'
+            order_type: 'market' or 'limit'
+            price: Limit price (required for limit orders)
+        """
+        action = side.upper()
+        order_type_upper = order_type.upper()
+        return await self.place_us_order(ticker, action, quantity, order_type_upper, price)
+
     # Note: Additional methods like get_order_status and cancel_order can be added
     # to kis_rest_api.py when needed, following the same pattern
