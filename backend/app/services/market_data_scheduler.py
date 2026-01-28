@@ -27,6 +27,16 @@ class MarketDataScheduler:
         self.is_running = False
         self.latest_recommendation = None  # Store latest recommendation
 
+    def _run_async_job(self, coro):
+        """Helper to run async coroutine in scheduler"""
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+        return loop.run_until_complete(coro)
+
     def start(self):
         """Start the scheduler with market phase-based collection"""
         if self.is_running:
@@ -37,7 +47,7 @@ class MarketDataScheduler:
 
         # 1. Server startup - collect data immediately
         self.scheduler.add_job(
-            lambda: asyncio.create_task(self._collect_with_recommendation('startup')),
+            lambda: self._run_async_job(self._collect_with_recommendation('startup')),
             'date',
             run_date=datetime.now(),
             id='startup_collection',
@@ -46,7 +56,7 @@ class MarketDataScheduler:
 
         # 2. Market open (9:30 AM EST = 14:30 UTC standard time)
         self.scheduler.add_job(
-            lambda: asyncio.create_task(self._collect_with_recommendation('market_open')),
+            lambda: self._run_async_job(self._collect_with_recommendation('market_open')),
             CronTrigger(
                 day_of_week='mon-fri',
                 hour=14,
@@ -59,7 +69,7 @@ class MarketDataScheduler:
 
         # 3. Mid-session (12:30 PM EST = 17:30 UTC)
         self.scheduler.add_job(
-            lambda: asyncio.create_task(self._collect_with_recommendation('mid_session')),
+            lambda: self._run_async_job(self._collect_with_recommendation('mid_session')),
             CronTrigger(
                 day_of_week='mon-fri',
                 hour=17,
@@ -72,7 +82,7 @@ class MarketDataScheduler:
 
         # 4. Near market close (3:30 PM EST = 20:30 UTC)
         self.scheduler.add_job(
-            lambda: asyncio.create_task(self._collect_with_recommendation('market_close')),
+            lambda: self._run_async_job(self._collect_with_recommendation('market_close')),
             CronTrigger(
                 day_of_week='mon-fri',
                 hour=20,
@@ -85,7 +95,7 @@ class MarketDataScheduler:
 
         # 5. General data collection every 30 minutes during market hours
         self.scheduler.add_job(
-            self._collect_market_data,
+            lambda: self._run_async_job(self._collect_market_data()),
             CronTrigger(
                 day_of_week='mon-fri',
                 hour='14-21',
@@ -142,14 +152,13 @@ class MarketDataScheduler:
             # Get market summary
             market_summary = await self.market_data_service.get_market_summary()
 
-            # Get portfolio state (we'll need to inject this from main.py)
-            # For now, use minimal portfolio state
+            # Get portfolio state
             from ..dependencies import get_portfolio_manager
-            portfolio_manager = get_portfolio_manager()
-
-            if portfolio_manager:
+            try:
+                portfolio_manager = await get_portfolio_manager()
                 portfolio_state = await portfolio_manager.get_current_state()
-            else:
+            except Exception as e:
+                logger.warning(f"[SCHEDULER] ⚠️ Could not get portfolio state: {e}")
                 portfolio_state = {
                     'total_value': 0,
                     'cash_balance': 0,
