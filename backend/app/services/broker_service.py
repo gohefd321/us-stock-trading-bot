@@ -274,7 +274,8 @@ class BrokerService:
                         'current_price': current_price,
                         'total_value': total_value,
                         'profit_loss': profit_loss,
-                        'profit_loss_pct': profit_loss_pct
+                        'profit_loss_pct': profit_loss_pct,
+                        'unrealized_pnl_pct': profit_loss_pct  # Alias for template compatibility
                     })
 
             logger.info(f"Fetched {len(positions)} US positions")

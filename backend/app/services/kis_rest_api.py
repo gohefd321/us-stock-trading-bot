@@ -340,40 +340,57 @@ class KISRestAPI:
 
             # Log full API response for debugging
             logger.info(f"US Balance API Response: rt_cd={result.get('rt_cd')}, msg_cd={result.get('msg_cd')}, msg1={result.get('msg1')}")
-            logger.debug(f"Full response: {result}")
+            logger.debug(f"Response keys: {list(result.keys())}")
 
             if result.get("rt_cd") == "0":
                 output1 = result.get("output1", [])
-                output2_list = result.get("output2", [])
+                output2_raw = result.get("output2")
 
-                # output2가 리스트인 경우 첫 번째 요소, 아니면 빈 딕셔너리
-                if isinstance(output2_list, list) and len(output2_list) > 0:
-                    output2 = output2_list[0]
+                logger.debug(f"output1 count: {len(output1)}")
+                logger.debug(f"output2 type: {type(output2_raw)}")
+
+                # 해외주식 잔고 조회의 경우 output2는 비어있거나 없을 수 있음
+                # output1에서 직접 보유 주식 평가액을 합산하고
+                # 예수금은 별도 API로 조회해야 할 수 있음
+
+                # Calculate holdings value from positions (output1)
+                holdings_value = 0.0
+                for pos in output1:
+                    # 평가금액 (현지통화)
+                    eval_amt = pos.get("ovrs_stck_evlu_amt", "0")
+                    try:
+                        holdings_value += float(eval_amt) if eval_amt else 0.0
+                    except (ValueError, TypeError):
+                        pass
+
+                # output2에서 예수금 및 총액 정보 추출 시도
+                if isinstance(output2_raw, dict):
+                    output2 = output2_raw
+                elif isinstance(output2_raw, list) and len(output2_raw) > 0:
+                    output2 = output2_raw[0]
                 else:
                     output2 = {}
 
-                logger.info(f"output2 type: {type(output2_list)}, length: {len(output2_list) if isinstance(output2_list, list) else 'N/A'}")
-                logger.info(f"output2 data: {output2}")
+                logger.debug(f"output2 keys: {list(output2.keys()) if output2 else 'empty'}")
 
-                # USD 기준 - 한국투자증권 API 문서 기준 필드명
-                # 실제 응답에서 필드명이 다를 수 있으므로 여러 가능성 확인
-                cash_balance_str = output2.get("frcr_pchs_amt1", output2.get("prvs_rcdl_exrt", "0"))
-                total_value_str = output2.get("tot_evlu_pfls_amt", output2.get("tot_evlu_amt", "0"))
-                holdings_value_str = output2.get("ovrs_tot_pfls", output2.get("frcr_evlu_pfls_amt", "0"))
+                # 예수금 (외화예수금) - 여러 필드명 시도
+                # frcr_buy_amt_smtl1: 외화매수금액합계1 (USD 예수금)
+                # frcr_pchs_amt1: 외화예수금
+                cash_balance = 0.0
+                for field in ["frcr_buy_amt_smtl1", "frcr_pchs_amt1", "prvs_rcdl_exrt", "dnca_tot_amt"]:
+                    cash_str = output2.get(field, "")
+                    if cash_str:
+                        try:
+                            cash_balance = float(cash_str)
+                            logger.debug(f"Found cash balance in field '{field}': ${cash_balance}")
+                            break
+                        except (ValueError, TypeError):
+                            continue
 
-                logger.info(f"Parsed values - cash: {cash_balance_str}, total: {total_value_str}, holdings: {holdings_value_str}")
+                # 총 평가금액 계산
+                total_value = cash_balance + holdings_value
 
-                try:
-                    cash_balance = float(cash_balance_str) if cash_balance_str else 0.0
-                    total_value = float(total_value_str) if total_value_str else 0.0
-                    holdings_value = float(holdings_value_str) if holdings_value_str else 0.0
-                except (ValueError, TypeError) as e:
-                    logger.error(f"Failed to convert balance values: {e}")
-                    cash_balance = 0.0
-                    total_value = 0.0
-                    holdings_value = 0.0
-
-                logger.info(f"✓ Balance parsed successfully: Cash=${cash_balance}, Total=${total_value}, Holdings=${holdings_value}")
+                logger.info(f"✓ Balance calculated: Cash=${cash_balance:.2f}, Holdings=${holdings_value:.2f}, Total=${total_value:.2f}")
 
                 return {
                     "cash_balance": cash_balance,
