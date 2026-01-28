@@ -193,6 +193,7 @@
             <nav>
                 <a href="/" {% if request.url.path == "/" %}class="active"{% endif %}>대시보드</a>
                 <a href="/settings" {% if request.url.path == "/settings" %}class="active"{% endif %}>설정</a>
+                <a href="/api-test" {% if request.url.path == "/api-test" %}class="active"{% endif %}>API 테스트</a>
                 <a href="/api/docs" target="_blank">API 문서</a>
             </nav>
         </div>

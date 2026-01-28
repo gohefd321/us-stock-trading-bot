@@ -76,6 +76,19 @@
             </ul>
         </div>
 
+        <h3 style="font-size: 1.1rem; border-bottom: 1px solid #eee; padding-bottom: 0.5rem; margin-top: 2rem;">AI 매매 추천 설정</h3>
+
+        <div style="margin-bottom: 1.5rem;">
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="checkbox" name="auto_trading_enabled" value="true" {% if auto_trading_enabled %}checked{% endif %} style="margin-right: 0.5rem;">
+                <span><strong>자동 거래 모드</strong> (AI 추천을 사용자 승인 없이 자동 실행)</span>
+            </label>
+            <small style="color: #666; display: block; margin-top: 0.25rem; margin-left: 1.75rem;">
+                ⚠️ 비활성화 시: 대시보드에서 승인 후 실행 (반자동)<br>
+                ⚠️ 활성화 시: AI 추천을 자동으로 실행 (자동) - 주의 필요!
+            </small>
+        </div>
+
         <button type="submit" class="success">저장</button>
     </form>
 

@@ -74,6 +74,26 @@ async def dashboard(request: Request, services: dict = Depends(get_services)):
         })
 
 
+@router.get("/api-test", response_class=HTMLResponse)
+async def api_test_page(request: Request, services: dict = Depends(get_services)):
+    """Render API test page"""
+    try:
+        settings = services['settings']
+
+        return templates.TemplateResponse("api_test.html", {
+            "request": request,
+            "paper_mode": settings.korea_investment_paper_mode
+        })
+
+    except Exception as e:
+        logger.error(f"Failed to render API test page: {e}")
+        return templates.TemplateResponse("api_test.html", {
+            "request": request,
+            "paper_mode": True,
+            "error": str(e)
+        })
+
+
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, services: dict = Depends(get_services)):
     """Render settings page"""
@@ -84,7 +104,7 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
 
         # Load API keys
         from sqlalchemy import select
-        from ..models import APIKey, RiskParameter
+        from ..models import APIKey, RiskParameter, UserPreference
 
         stmt = select(APIKey).where(APIKey.is_active == True)
         result = await db.execute(stmt)
@@ -98,6 +118,12 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
                 api_keys[key.key_name] = decrypted_value
             except Exception as e:
                 logger.error(f"Failed to decrypt {key.key_name}: {e}")
+
+        # Load auto trading preference
+        stmt = select(UserPreference).where(UserPreference.key == 'auto_trading_enabled')
+        result = await db.execute(stmt)
+        auto_trading_pref = result.scalar_one_or_none()
+        auto_trading_enabled = auto_trading_pref.value == 'true' if auto_trading_pref else False
 
         # Load risk parameters
         stmt = select(RiskParameter).limit(1)
@@ -128,6 +154,7 @@ async def settings_page(request: Request, services: dict = Depends(get_services)
             "risk_params": risk_params,
             "paper_mode": settings.korea_investment_paper_mode,
             "password_padding": api_keys.get('password_padding') == 'true',
+            "auto_trading_enabled": auto_trading_enabled,
             "success": request.query_params.get('success'),
             "error": request.query_params.get('error')
         })
@@ -161,6 +188,7 @@ async def save_api_keys(
     reddit_client_id: str = Form(""),
     reddit_client_secret: str = Form(""),
     reddit_user_agent: str = Form(""),
+    auto_trading_enabled: str = Form("false"),
     services: dict = Depends(get_services)
 ):
     """Save API keys and redirect to settings"""
@@ -169,7 +197,7 @@ async def save_api_keys(
         encryption = services['encryption']
 
         from sqlalchemy import select, update
-        from ..models import APIKey
+        from ..models import APIKey, UserPreference
 
         # Helper function to save or update key
         async def save_key(key_name: str, key_value: str):
@@ -250,6 +278,20 @@ async def save_api_keys(
         # Write back to .env
         with open(env_path, 'w') as f:
             f.writelines(lines)
+
+        # Save auto trading preference
+        stmt = select(UserPreference).where(UserPreference.key == 'auto_trading_enabled')
+        result = await db.execute(stmt)
+        pref = result.scalar_one_or_none()
+
+        if pref:
+            pref.value = 'true' if auto_trading_enabled == 'true' else 'false'
+        else:
+            pref = UserPreference(
+                key='auto_trading_enabled',
+                value='true' if auto_trading_enabled == 'true' else 'false'
+            )
+            db.add(pref)
 
         await db.commit()
 

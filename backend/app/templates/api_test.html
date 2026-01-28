@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+
+{% block title %}API 테스트 - US Stock Trading Bot{% endblock %}
+
+{% block content %}
+<h1>🧪 한국투자증권 API 테스트</h1>
+
+<p style="color: #666; margin-bottom: 2rem;">API 연동 테스트를 위한 디버깅 도구입니다. 모든 주문은 수량 0으로 실행되어 실제 거래가 발생하지 않습니다.</p>
+
+<!-- 잔고 조회 테스트 -->
+<div class="card">
+    <h2>📊 잔고 조회 (해외주식)</h2>
+    <p style="color: #666;">TR_ID: {% if paper_mode %}VTTS3012R (모의투자){% else %}TTTS3012R (실전투자){% endif %}</p>
+
+    <button onclick="testBalance()" class="success">잔고 조회 테스트</button>
+
+    <div id="balanceResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
+        <h3 style="margin-top: 0;">응답 결과:</h3>
+        <pre id="balanceData" style="white-space: pre-wrap; overflow-x: auto;"></pre>
+    </div>
+</div>
+
+<!-- 현재가 조회 테스트 -->
+<div class="card">
+    <h2>💵 현재가 조회</h2>
+    <p style="color: #666;">TR_ID: HHDFS00000300</p>
+
+    <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">종목 코드</label>
+        <input type="text" id="priceTicker" value="AAPL" placeholder="AAPL" style="width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+    </div>
+
+    <button onclick="testPrice()" class="success">현재가 조회 테스트</button>
+
+    <div id="priceResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
+        <h3 style="margin-top: 0;">응답 결과:</h3>
+        <pre id="priceData" style="white-space: pre-wrap; overflow-x: auto;"></pre>
+    </div>
+</div>
+
+<!-- 매수 주문 테스트 -->
+<div class="card">
+    <h2>📈 매수 주문 테스트 (수량 0)</h2>
+    <p style="color: #666;">TR_ID: {% if paper_mode %}VTTT1002U (모의투자){% else %}TTTT1002U (실전투자){% endif %}</p>
+
+    <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">종목 코드</label>
+        <input type="text" id="buyTicker" value="AAPL" placeholder="AAPL" style="width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">주문 유형</label>
+        <select id="buyOrderType" style="width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="market">시장가</option>
+            <option value="limit">지정가</option>
+        </select>
+    </div>
+
+    <div id="buyPriceDiv" style="margin-bottom: 1rem; display: none;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">지정가격</label>
+        <input type="number" id="buyPrice" value="100" placeholder="100.00" step="0.01" style="width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+    </div>
+
+    <button onclick="testBuyOrder()" class="success">매수 주문 테스트 (수량 0)</button>
+
+    <div id="buyResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
+        <h3 style="margin-top: 0;">응답 결과:</h3>
+        <pre id="buyData" style="white-space: pre-wrap; overflow-x: auto;"></pre>
+    </div>
+</div>
+
+<!-- 매도 주문 테스트 -->
+<div class="card">
+    <h2>📉 매도 주문 테스트 (수량 0)</h2>
+    <p style="color: #666;">TR_ID: {% if paper_mode %}VTTT1001U (모의투자){% else %}TTTT1006U (실전투자){% endif %}</p>
+
+    <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">종목 코드</label>
+        <input type="text" id="sellTicker" value="AAPL" placeholder="AAPL" style="width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+    </div>
+
+    <div style="margin-bottom: 1rem;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">주문 유형</label>
+        <select id="sellOrderType" style="width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+            <option value="market">시장가</option>
+            <option value="limit">지정가</option>
+        </select>
+    </div>
+
+    <div id="sellPriceDiv" style="margin-bottom: 1rem; display: none;">
+        <label style="display: block; margin-bottom: 0.5rem; font-weight: 500;">지정가격</label>
+        <input type="number" id="sellPrice" value="100" placeholder="100.00" step="0.01" style="width: 200px; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px;">
+    </div>
+
+    <button onclick="testSellOrder()" class="danger">매도 주문 테스트 (수량 0)</button>
+
+    <div id="sellResult" style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px; display: none;">
+        <h3 style="margin-top: 0;">응답 결과:</h3>
+        <pre id="sellData" style="white-space: pre-wrap; overflow-x: auto;"></pre>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 주문 유형에 따라 가격 입력 표시/숨김
+    document.getElementById('buyOrderType').addEventListener('change', function() {
+        document.getElementById('buyPriceDiv').style.display = this.value === 'limit' ? 'block' : 'none';
+    });
+
+    document.getElementById('sellOrderType').addEventListener('change', function() {
+        document.getElementById('sellPriceDiv').style.display = this.value === 'limit' ? 'block' : 'none';
+    });
+
+    // 잔고 조회 테스트
+    async function testBalance() {
+        const resultDiv = document.getElementById('balanceResult');
+        const dataDiv = document.getElementById('balanceData');
+
+        resultDiv.style.display = 'block';
+        dataDiv.textContent = '조회 중...';
+
+        try {
+            const response = await fetch('/api/test/balance');
+            const data = await response.json();
+            dataDiv.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            dataDiv.textContent = `오류: ${error.message}`;
+        }
+    }
+
+    // 현재가 조회 테스트
+    async function testPrice() {
+        const ticker = document.getElementById('priceTicker').value;
+        const resultDiv = document.getElementById('priceResult');
+        const dataDiv = document.getElementById('priceData');
+
+        if (!ticker) {
+            alert('종목 코드를 입력하세요');
+            return;
+        }
+
+        resultDiv.style.display = 'block';
+        dataDiv.textContent = '조회 중...';
+
+        try {
+            const response = await fetch(`/api/test/price/${ticker}`);
+            const data = await response.json();
+            dataDiv.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            dataDiv.textContent = `오류: ${error.message}`;
+        }
+    }
+
+    // 매수 주문 테스트
+    async function testBuyOrder() {
+        const ticker = document.getElementById('buyTicker').value;
+        const orderType = document.getElementById('buyOrderType').value;
+        const price = orderType === 'limit' ? document.getElementById('buyPrice').value : 0;
+        const resultDiv = document.getElementById('buyResult');
+        const dataDiv = document.getElementById('buyData');
+
+        if (!ticker) {
+            alert('종목 코드를 입력하세요');
+            return;
+        }
+
+        if (!confirm(`${ticker} 매수 주문 테스트를 실행하시겠습니까? (수량 0)`)) {
+            return;
+        }
+
+        resultDiv.style.display = 'block';
+        dataDiv.textContent = '주문 중...';
+
+        try {
+            const response = await fetch('/api/test/buy', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    ticker: ticker,
+                    quantity: 0,
+                    price: parseFloat(price),
+                    order_type: orderType
+                })
+            });
+            const data = await response.json();
+            dataDiv.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            dataDiv.textContent = `오류: ${error.message}`;
+        }
+    }
+
+    // 매도 주문 테스트
+    async function testSellOrder() {
+        const ticker = document.getElementById('sellTicker').value;
+        const orderType = document.getElementById('sellOrderType').value;
+        const price = orderType === 'limit' ? document.getElementById('sellPrice').value : 0;
+        const resultDiv = document.getElementById('sellResult');
+        const dataDiv = document.getElementById('sellData');
+
+        if (!ticker) {
+            alert('종목 코드를 입력하세요');
+            return;
+        }
+
+        if (!confirm(`${ticker} 매도 주문 테스트를 실행하시겠습니까? (수량 0)`)) {
+            return;
+        }
+
+        resultDiv.style.display = 'block';
+        dataDiv.textContent = '주문 중...';
+
+        try {
+            const response = await fetch('/api/test/sell', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    ticker: ticker,
+                    quantity: 0,
+                    price: parseFloat(price),
+                    order_type: orderType
+                })
+            });
+            const data = await response.json();
+            dataDiv.textContent = JSON.stringify(data, null, 2);
+        } catch (error) {
+            dataDiv.textContent = `오류: ${error.message}`;
+        }
+    }
+</script>
+{% endblock %}
