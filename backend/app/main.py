@@ -30,6 +30,9 @@ logger = logging.getLogger(__name__)
 # Background task for token refresh
 _token_refresh_task = None
 
+# Market data scheduler
+_market_data_scheduler = None
+
 # Create FastAPI app
 app = FastAPI(
     title=settings.app_name,
@@ -86,7 +89,7 @@ async def token_refresh_loop():
 @app.on_event("startup")
 async def startup_event():
     """Startup event handler"""
-    global _token_refresh_task
+    global _token_refresh_task, _market_data_scheduler
 
     logger.info("Starting US Stock Trading Bot...")
     logger.info(f"Environment: {settings.app_name} v{settings.app_version}")
@@ -111,13 +114,23 @@ async def startup_event():
     _token_refresh_task = asyncio.create_task(token_refresh_loop())
     logger.info("Started access token refresh task (every 22 hours)")
 
+    # Start market data scheduler
+    try:
+        from .services.market_data_scheduler import MarketDataScheduler
+        _market_data_scheduler = MarketDataScheduler(settings)
+        _market_data_scheduler.start()
+        logger.info("Started market data scheduler (every 30 minutes)")
+    except Exception as e:
+        logger.error(f"Failed to start market data scheduler: {e}")
+        # Continue without market data scheduler
+
     logger.info("Application startup complete")
 
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Shutdown event handler"""
-    global _token_refresh_task
+    global _token_refresh_task, _market_data_scheduler
 
     logger.info("Shutting down US Stock Trading Bot...")
 
@@ -128,6 +141,10 @@ async def shutdown_event():
             await _token_refresh_task
         except asyncio.CancelledError:
             pass
+
+    # Stop market data scheduler
+    if _market_data_scheduler:
+        _market_data_scheduler.stop()
 
     logger.info("Application shutdown complete")
 

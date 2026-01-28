@@ -12,6 +12,7 @@ from typing import Optional
 from ..database import get_db
 from ..services.portfolio_manager import PortfolioManager
 from ..services.broker_service import BrokerService
+from ..services.market_data_service import MarketDataService
 from ..config import Settings
 
 logger = logging.getLogger(__name__)
@@ -34,11 +35,13 @@ async def get_services(db: AsyncSession = Depends(get_db)):
     settings = Settings()
     broker = BrokerService(settings)
     portfolio = PortfolioManager(broker, settings, db)
+    market_data = MarketDataService(settings)
 
     return {
         'settings': settings,
         'broker': broker,
         'portfolio': portfolio,
+        'market_data': market_data,
         'db': db
     }
 
@@ -59,6 +62,7 @@ async def chat_endpoint(
 
         settings = services['settings']
         portfolio = services['portfolio']
+        market_data = services['market_data']
 
         # Gemini API 키 확인
         logger.info("[CHAT] 🔑 Checking Gemini API key...")
@@ -75,6 +79,11 @@ async def chat_endpoint(
         portfolio_state = await portfolio.get_current_state()
         logger.info(f"[CHAT] ✅ Portfolio state retrieved: ${portfolio_state.get('total_value', 0):.2f} total, {portfolio_state.get('position_count', 0)} positions")
 
+        # 시장 데이터 가져오기
+        logger.info("[CHAT] 🌐 Fetching market data...")
+        market_summary = await market_data.get_market_summary()
+        logger.info(f"[CHAT] ✅ Market data retrieved: {len(market_summary.get('wsb_trending', []))} WSB stocks")
+
         # Gemini 설정
         logger.info("[CHAT] 🤖 Configuring Gemini API...")
         genai.configure(api_key=settings.gemini_api_key)
@@ -84,7 +93,7 @@ async def chat_endpoint(
         model = genai.GenerativeModel('gemini-3-flash-preview')
 
         # 컨텍스트 구성
-        logger.info("[CHAT] 📝 Building context with portfolio data...")
+        logger.info("[CHAT] 📝 Building context with portfolio and market data...")
         context = f"""
 당신은 미국 주식 투자 분석 전문가입니다. 사용자의 포트폴리오를 분석하고 투자 조언을 제공합니다.
 
@@ -113,11 +122,18 @@ async def chat_endpoint(
             logger.info("[CHAT] 📭 No positions to add")
             context += "- 보유 중인 종목이 없습니다.\n"
 
+        # 시장 데이터 추가
+        context += f"\n\n{market_summary.get('summary_text', '')}\n"
+
         context += f"""
 
 사용자 질문: {request.message}
 
-위 포트폴리오 정보를 참고하여 사용자의 질문에 답변해주세요.
+위 포트폴리오 정보와 시장 동향을 참고하여 사용자의 질문에 답변해주세요.
+- Reddit WSB에서 트렌딩 중인 종목 정보를 활용하세요
+- Yahoo Finance의 실시간 가격 및 뉴스 정보를 참고하세요
+- 사용자가 특정 종목에 대해 물어보면 해당 종목의 현재 상황을 설명해주세요
+
 답변은 친절하고 이해하기 쉽게, 한국어로 작성해주세요.
 투자 조언을 할 때는 반드시 "이는 참고용이며 투자 결정은 본인의 책임입니다"라는 경고를 포함해주세요.
 """
