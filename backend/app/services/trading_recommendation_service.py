@@ -63,7 +63,7 @@ class TradingRecommendationService:
             genai.configure(api_key=self.settings.gemini_api_key)
             model = genai.GenerativeModel(
                 'gemini-3-flash-preview',
-                tools='google_search_retrieval'  # Enable Google Search for real-time market data
+                tools='google_search'  # Enable Google Search for real-time market data
             )
 
             # Load user preferences

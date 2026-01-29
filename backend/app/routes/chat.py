@@ -295,7 +295,7 @@ async def chat_endpoint(
         logger.info("[CHAT] 🎯 Initializing Gemini model: gemini-3-flash-preview with Google Search")
         model = genai.GenerativeModel(
             'gemini-3-flash-preview',
-            tools='google_search_retrieval'  # Enable Google Search
+            tools='google_search'  # Enable Google Search
         )
 
         # 컨텍스트 구성
