@@ -266,8 +266,11 @@ class KISRestAPI:
                 output1 = result.get("output1", [])
                 output2 = result.get("output2", [{}])[0]
 
-                # 예수금 (현금)
-                cash_balance = float(output2.get("dnca_tot_amt", 0))
+                # 주문가능금액 (미수없는매수금액 우선, 없으면 예수금총액)
+                # nrcvb_buy_amt: 미수없는매수금액 (실제 주문 가능한 금액)
+                # ord_psbl_cash: 주문가능현금
+                # dnca_tot_amt: 예수금총액
+                cash_balance = float(output2.get("nrcvb_buy_amt") or output2.get("ord_psbl_cash") or output2.get("dnca_tot_amt", 0))
                 # 총 평가금액
                 total_value = float(output2.get("tot_evlu_amt", 0))
                 # 보유 종목 평가금액
@@ -376,17 +379,18 @@ class KISRestAPI:
                 else:
                     logger.warning("output2 is empty, may need separate cash balance inquiry")
 
-                # 예수금 (외화예수금) 조회
+                # 주문가능금액 (외화) 조회
                 # 한국투자증권 해외주식 잔고 조회 API는 output2가 비어있을 수 있음
                 # 별도로 해외주식 예수금 조회 API를 호출해야 할 수 있음
                 cash_balance = 0.0
 
-                # Try multiple field names
+                # Try multiple field names (주문가능금액 우선)
                 cash_candidates = [
-                    "frcr_buy_amt_smtl1",   # 외화매수금액합계
+                    "frcr_ord_psbl_amt1",    # 외화주문가능금액1 (최우선)
+                    "ord_psbl_frcr_amt",     # 주문가능외화금액
+                    "frcr_buy_amt_smtl1",    # 외화매수금액합계
                     "frcr_pchs_amt1",        # 외화예수금1
-                    "frcr_evlu_amt2",        # 외화평가금액2
-                    "prvs_rcdl_exrt",        # 전일정산환율
+                    "frcr_dncl_amt_2",       # 외화예수금액2
                     "dnca_tot_amt",          # 예수금총액
                 ]
 
