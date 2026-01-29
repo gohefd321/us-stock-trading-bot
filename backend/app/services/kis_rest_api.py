@@ -433,8 +433,16 @@ class KISRestAPI:
                         except (ValueError, TypeError):
                             continue
 
-                if cash_balance == 0:
-                    logger.warning("[KIS] 주문가능금액 $0.00 - 별도 API 호출 필요할 수 있음")
+                # frcr_pchs_amt1은 예수금이므로, 별도로 주문가능금액 API를 호출
+                logger.info(f"[KIS] frcr_pchs_amt1 (예수금): ${cash_balance:.2f} - 주문가능금액 별도 조회 중...")
+
+                # 해외주식 주문가능금액 조회
+                actual_buying_power = await self._get_us_buying_power()
+                if actual_buying_power > 0:
+                    cash_balance = actual_buying_power
+                    logger.info(f"[KIS] ✓ 실제 주문가능금액: ${cash_balance:.2f}")
+                else:
+                    logger.warning(f"[KIS] 주문가능금액 조회 실패, 예수금 사용: ${cash_balance:.2f}")
 
                 # 총 평가금액 계산
                 total_value = cash_balance + holdings_value
@@ -472,6 +480,56 @@ class KISRestAPI:
                 "error": str(e),
                 "timestamp": datetime.now().isoformat()
             }
+
+    async def _get_us_buying_power(self) -> float:
+        """
+        해외주식 주문가능금액 조회 (별도 API)
+
+        Returns:
+            주문가능금액 (USD)
+        """
+        if not self.ensure_token():
+            return 0.0
+
+        # TR_ID: TTTS3007R (실전투자) / VTTS3007R (모의투자) - 해외주식 주문가능금액 조회
+        tr_id = "VTTS3007R" if self.is_paper else "TTTS3007R"
+
+        url = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-psamount"
+
+        headers = self._get_headers(tr_id)
+
+        params = {
+            "CANO": self.account_prefix,
+            "ACNT_PRDT_CD": self.account_suffix,
+            "OVRS_EXCG_CD": "NASD",  # 나스닥
+            "OVRS_ORD_UNPR": "0",     # 해외주문단가 (0: 시장가)
+            "ITEM_CD": "AAPL",        # 종목코드 (더미, 실제론 사용 안됨)
+        }
+
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(
+                None,
+                lambda: requests.get(url, headers=headers, params=params)
+            )
+            response.raise_for_status()
+
+            result = response.json()
+
+            if result.get("rt_cd") == "0":
+                output = result.get("output", {})
+                # ord_psbl_frcr_amt: 주문가능외화금액
+                buying_power_str = output.get("ord_psbl_frcr_amt", "0")
+                buying_power = float(buying_power_str)
+                logger.info(f"[KIS] 주문가능금액 API 응답: ${buying_power:.2f}")
+                return buying_power
+            else:
+                logger.error(f"[KIS] 주문가능금액 조회 실패: {result.get('msg1')}")
+                return 0.0
+
+        except Exception as e:
+            logger.error(f"[KIS] 주문가능금액 조회 예외: {e}")
+            return 0.0
 
     async def get_us_stock_price(self, ticker: str, exchange: str = "NASD") -> Optional[float]:
         """
