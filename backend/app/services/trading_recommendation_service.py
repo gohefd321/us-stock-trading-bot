@@ -59,16 +59,16 @@ class TradingRecommendationService:
             }
 
         try:
-            # Configure Gemini with Google Search Grounding enabled
-            genai.configure(api_key=self.settings.gemini_api_key)
+            # Use the NEW google-genai SDK with Google Search Grounding
+            from google import genai as genai_new
+            from google.genai import types
 
-            # Create model with Google Search grounding tool
-            from google.generativeai.types import Tool
-            google_search_tool = Tool(google_search={})
+            # Create client with API key
+            self.genai_client = genai_new.Client(api_key=self.settings.gemini_api_key)
 
-            model = genai.GenerativeModel(
-                'gemini-3-flash-preview',
-                tools=[google_search_tool]  # Enable Google Search grounding
+            # Configure Google Search tool for real-time market data
+            self.google_search_tool = types.Tool(
+                google_search=types.GoogleSearch()
             )
 
             # Load user preferences
@@ -82,8 +82,8 @@ class TradingRecommendationService:
                 user_prefs
             )
 
-            # Generate recommendations
-            response = await self._call_gemini_with_retry(model, context)
+            # Generate recommendations with Google Search grounding
+            response = await self._call_gemini_with_retry_new(context)
 
             if not response or not response.text:
                 return {
@@ -350,17 +350,33 @@ RATIONALE: 안정적인 상승 추세 유지 중, 현재 포지션 유지가 최
 
         return context
 
-    async def _call_gemini_with_retry(self, model, context, max_retries=2):
-        """Call Gemini API with retry logic (120s timeout for comprehensive analysis)"""
+    async def _call_gemini_with_retry_new(self, context, max_retries=2):
+        """Call NEW Gemini API with Google Search and retry logic (120s timeout)"""
         import asyncio
+        from google.genai import types
 
         for attempt in range(max_retries):
             try:
+                logger.info(f"[RECOMMEND] 🔍 Calling gemini-3-flash-preview with Google Search (attempt {attempt + 1})...")
+
+                # Call the NEW SDK with Google Search
                 response = await asyncio.wait_for(
-                    asyncio.to_thread(model.generate_content, context),
-                    timeout=120.0  # Increased to 120 seconds for thorough market research
+                    asyncio.to_thread(
+                        self.genai_client.models.generate_content,
+                        model="gemini-3-flash-preview",
+                        contents=context,
+                        config=types.GenerateContentConfig(
+                            tools=[self.google_search_tool],
+                            response_modalities=["TEXT"],
+                            temperature=0.3
+                        )
+                    ),
+                    timeout=120.0  # 120 seconds for thorough market research with Google Search
                 )
+
+                logger.info("[RECOMMEND] ✅ Gemini API responded successfully with Google Search")
                 return response
+
             except asyncio.TimeoutError:
                 if attempt < max_retries - 1:
                     logger.warning(f"[RECOMMEND] ⏱️ Timeout, retrying... (attempt {attempt + 1})")
