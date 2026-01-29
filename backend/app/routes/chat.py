@@ -291,11 +291,16 @@ async def chat_endpoint(
         logger.info("[CHAT] 🤖 Configuring Gemini API...")
         genai.configure(api_key=settings.gemini_api_key)
 
-        # Use gemini-3-flash-preview (latest flash model) with Google Search enabled
+        # Use gemini-3-flash-preview (latest flash model) with Google Search Grounding enabled
         logger.info("[CHAT] 🎯 Initializing Gemini model: gemini-3-flash-preview with Google Search")
+
+        # Create model with Google Search grounding tool
+        from google.generativeai.types import Tool
+        google_search_tool = Tool(google_search={})
+
         model = genai.GenerativeModel(
             'gemini-3-flash-preview',
-            tools='google_search'  # Enable Google Search
+            tools=[google_search_tool]  # Enable Google Search grounding
         )
 
         # 컨텍스트 구성

@@ -59,11 +59,16 @@ class TradingRecommendationService:
             }
 
         try:
-            # Configure Gemini with Google Search enabled
+            # Configure Gemini with Google Search Grounding enabled
             genai.configure(api_key=self.settings.gemini_api_key)
+
+            # Create model with Google Search grounding tool
+            from google.generativeai.types import Tool
+            google_search_tool = Tool(google_search={})
+
             model = genai.GenerativeModel(
                 'gemini-3-flash-preview',
-                tools='google_search'  # Enable Google Search for real-time market data
+                tools=[google_search_tool]  # Enable Google Search grounding
             )
 
             # Load user preferences
