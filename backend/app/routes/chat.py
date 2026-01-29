@@ -287,21 +287,20 @@ async def chat_endpoint(
         user_prefs = result.scalar_one_or_none()
         logger.info(f"[CHAT] ✅ User preferences loaded: {user_prefs is not None}")
 
-        # Gemini 설정
-        logger.info("[CHAT] 🤖 Configuring Gemini API...")
-        genai.configure(api_key=settings.gemini_api_key)
+        # Gemini 설정 - NEW google-genai SDK with Google Search Grounding
+        logger.info("[CHAT] 🤖 Initializing Gemini API with Google Search...")
+        from google import genai as genai_new
+        from google.genai import types
 
-        # Use gemini-3-flash-preview (latest flash model) with Google Search Grounding enabled
-        logger.info("[CHAT] 🎯 Initializing Gemini model: gemini-3-flash-preview with Google Search")
+        # Create client with API key
+        genai_client = genai_new.Client(api_key=settings.gemini_api_key)
 
-        # Create model with Google Search grounding tool
-        from google.generativeai.types import Tool
-        google_search_tool = Tool(google_search={})
-
-        model = genai.GenerativeModel(
-            'gemini-3-flash-preview',
-            tools=[google_search_tool]  # Enable Google Search grounding
+        # Configure Google Search tool for real-time market data
+        google_search_tool = types.Tool(
+            google_search=types.GoogleSearch()
         )
+
+        logger.info("[CHAT] 🎯 Using gemini-3-flash-preview with Google Search Grounding")
 
         # 컨텍스트 구성
         logger.info("[CHAT] 📝 Building context with portfolio and market data...")
@@ -425,8 +424,9 @@ async def chat_endpoint(
 ### 📊 정보 활용:
 - **Reddit WSB 트렌딩**: 단기 모멘텀 파악
 - **Yahoo Finance**: 실시간 가격 및 뉴스
-- **Google 검색**: 최신 뉴스, 실적 발표, 산업 동향, 주가 전망 등을 적극 조사
+- **현재 시점**: 2026년 1월 기준으로 최신 정보와 시장 상황 분석
 - **사용자 선호도**: 위에 명시된 투자 선호도를 최우선으로 고려
+- **주요 뉴스 및 트렌드**: 최근 실적 발표, 산업 동향, 경제 지표 등을 고려한 분석 제공
 
 ### 💬 답변 스타일:
 - 전문 트레이더답게 구체적이고 실전적인 조언 제공
@@ -443,17 +443,33 @@ async def chat_endpoint(
 """
         logger.info(f"[CHAT] ✅ Context built ({len(context)} chars)")
 
-        # Gemini API 호출 with timeout and retry
+        # Gemini API 호출 with timeout and retry - NEW SDK with Google Search
         import asyncio
 
-        logger.info("[CHAT] 🚀 Calling Gemini API (timeout: 120s)...")
+        logger.info("[CHAT] 🚀 Calling Gemini API with Google Search (timeout: 120s)...")
         try:
-            # Run with 120 second timeout
+            # Run with 120 second timeout using NEW SDK
             response = await asyncio.wait_for(
-                asyncio.to_thread(model.generate_content, context),
+                asyncio.to_thread(
+                    genai_client.models.generate_content,
+                    model="gemini-3-flash-preview",
+                    contents=context,
+                    config=types.GenerateContentConfig(
+                        tools=[google_search_tool],
+                        response_modalities=["TEXT"],
+                        temperature=0.3
+                    )
+                ),
                 timeout=120.0
             )
-            logger.info("[CHAT] ✅ Gemini API responded successfully")
+            logger.info("[CHAT] ✅ Gemini API responded successfully with Google Search")
+
+            # Log grounding metadata if available
+            if response.candidates and len(response.candidates) > 0:
+                grounding = response.candidates[0].grounding_metadata
+                if grounding and hasattr(grounding, 'search_entry_point') and grounding.search_entry_point:
+                    logger.info("[CHAT] 🔍 Google Search was used for this response")
+
         except asyncio.TimeoutError:
             logger.error("[CHAT] ⏱️ Gemini API timeout after 120 seconds")
             return ChatResponse(
