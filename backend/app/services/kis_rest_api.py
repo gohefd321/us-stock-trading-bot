@@ -266,11 +266,35 @@ class KISRestAPI:
                 output1 = result.get("output1", [])
                 output2 = result.get("output2", [{}])[0]
 
-                # 주문가능금액 (미수없는매수금액 우선, 없으면 예수금총액)
+                # Log all available fields for debugging
+                logger.info(f"[KIS] 국내주식 잔고 output2 필드: {list(output2.keys())}")
+
+                # 주문가능금액 조회 (여러 필드명 시도)
                 # nrcvb_buy_amt: 미수없는매수금액 (실제 주문 가능한 금액)
                 # ord_psbl_cash: 주문가능현금
+                # nass_amt: 순자산금액
                 # dnca_tot_amt: 예수금총액
-                cash_balance = float(output2.get("nrcvb_buy_amt") or output2.get("ord_psbl_cash") or output2.get("dnca_tot_amt", 0))
+                cash_candidates_domestic = [
+                    "nrcvb_buy_amt",   # 미수없는매수금액 (최우선)
+                    "ord_psbl_cash",   # 주문가능현금
+                    "nass_amt",        # 순자산금액
+                    "dnca_tot_amt",    # 예수금총액
+                ]
+
+                cash_balance = 0.0
+                selected_field = None
+                for field in cash_candidates_domestic:
+                    val_str = output2.get(field, "0")
+                    try:
+                        val = float(val_str)
+                        if val > 0:
+                            cash_balance = val
+                            selected_field = field
+                            break
+                    except (ValueError, TypeError):
+                        continue
+
+                logger.info(f"[KIS] 주문가능금액: {cash_balance} (선택된 필드: {selected_field})")
                 # 총 평가금액
                 total_value = float(output2.get("tot_evlu_amt", 0))
                 # 보유 종목 평가금액
@@ -375,9 +399,9 @@ class KISRestAPI:
                     output2 = {}
 
                 if output2:
-                    logger.info(f"output2 available fields: {list(output2.keys())}")
+                    logger.info(f"[KIS] 해외주식 잔고 output2 필드: {list(output2.keys())}")
                 else:
-                    logger.warning("output2 is empty, may need separate cash balance inquiry")
+                    logger.warning("[KIS] output2 is empty, may need separate cash balance inquiry")
 
                 # 주문가능금액 (외화) 조회
                 # 한국투자증권 해외주식 잔고 조회 API는 output2가 비어있을 수 있음
@@ -394,6 +418,9 @@ class KISRestAPI:
                     "dnca_tot_amt",          # 예수금총액
                 ]
 
+                # Log all candidate field values
+                logger.info(f"[KIS] 주문가능금액 후보 필드 값: {[(f, output2.get(f)) for f in cash_candidates]}")
+
                 for field in cash_candidates:
                     cash_str = output2.get(field, "")
                     if cash_str and str(cash_str).strip() and cash_str != "0":
@@ -401,13 +428,13 @@ class KISRestAPI:
                             val = float(cash_str)
                             if val > 0:
                                 cash_balance = val
-                                logger.info(f"✓ Found cash balance in field '{field}': ${cash_balance:.2f}")
+                                logger.info(f"[KIS] ✓ 주문가능금액 선택: {field} = ${cash_balance:.2f}")
                                 break
                         except (ValueError, TypeError):
                             continue
 
                 if cash_balance == 0:
-                    logger.warning("Cash balance is $0.00 - this may be accurate or may require separate API call")
+                    logger.warning("[KIS] 주문가능금액 $0.00 - 별도 API 호출 필요할 수 있음")
 
                 # 총 평가금액 계산
                 total_value = cash_balance + holdings_value
