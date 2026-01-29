@@ -22,7 +22,8 @@ class TradingRecommendationService:
         self,
         portfolio_state: Dict,
         market_summary: Dict,
-        market_phase: str = "general"
+        market_phase: str = "general",
+        db=None
     ) -> Dict:
         """
         Generate trading recommendations using AI
@@ -62,11 +63,15 @@ class TradingRecommendationService:
             genai.configure(api_key=self.settings.gemini_api_key)
             model = genai.GenerativeModel('gemini-3-flash-preview')
 
+            # Load user preferences
+            user_prefs = await self._load_user_preferences(db) if db else None
+
             # Build context
             context = self._build_recommendation_context(
                 portfolio_state,
                 market_summary,
-                market_phase
+                market_phase,
+                user_prefs
             )
 
             # Generate recommendations
@@ -98,11 +103,32 @@ class TradingRecommendationService:
                 'timestamp': datetime.now().isoformat()
             }
 
+    async def _load_user_preferences(self, db):
+        """Load user investment preferences from database"""
+        try:
+            if not db:
+                return None
+
+            from ..models import InvestmentPreference
+            from sqlalchemy import select
+
+            stmt = select(InvestmentPreference).limit(1)
+            result = await db.execute(stmt)
+            prefs = result.scalar_one_or_none()
+
+            if prefs:
+                logger.info(f"[RECOMMEND] 💾 Loaded user preferences: {prefs.risk_appetite}, {prefs.investment_style}")
+            return prefs
+        except Exception as e:
+            logger.warning(f"[RECOMMEND] Failed to load user preferences: {e}")
+            return None
+
     def _build_recommendation_context(
         self,
         portfolio_state: Dict,
         market_summary: Dict,
-        market_phase: str
+        market_phase: str,
+        user_prefs=None
     ) -> str:
         """Build context for AI recommendation generation"""
 
@@ -141,6 +167,63 @@ class TradingRecommendationService:
 
         # Add market summary
         context += f"\n\n## 시장 동향 (다중 소스 통합):\n{market_summary.get('summary_text', '')}\n"
+
+        # Add user preferences
+        if user_prefs:
+            context += "\n\n## 사용자 투자 선호도 (반드시 고려):\n"
+
+            # Risk appetite
+            risk_map = {
+                'conservative': '보수적 (안전한 투자 선호)',
+                'moderate': '중립적 (균형 잡힌 투자)',
+                'aggressive': '공격적 (고위험 고수익 추구)'
+            }
+            context += f"- 위험 성향: {risk_map.get(user_prefs.risk_appetite, user_prefs.risk_appetite)}\n"
+
+            # Investment style
+            style_map = {
+                'growth': '성장주 선호',
+                'value': '가치주 선호',
+                'dividend': '배당주 선호',
+                'balanced': '균형 잡힌 포트폴리오'
+            }
+            context += f"- 투자 스타일: {style_map.get(user_prefs.investment_style, user_prefs.investment_style)}\n"
+
+            # Preferred sectors
+            if user_prefs.preferred_sectors:
+                sectors = user_prefs.preferred_sectors.split(',')
+                context += f"- 선호 섹터: {', '.join(filter(None, sectors))}\n"
+
+            # Avoided sectors
+            if user_prefs.avoided_sectors:
+                sectors = user_prefs.avoided_sectors.split(',')
+                context += f"- 회피 섹터: {', '.join(filter(None, sectors))}\n"
+
+            # Preferred tickers
+            if user_prefs.preferred_tickers:
+                tickers = user_prefs.preferred_tickers.split(',')
+                context += f"- 선호 종목: {', '.join(filter(None, tickers))}\n"
+
+            # Avoided tickers
+            if user_prefs.avoided_tickers:
+                tickers = user_prefs.avoided_tickers.split(',')
+                context += f"- 회피 종목: {', '.join(filter(None, tickers))}\n"
+
+            # Strategy preferences
+            if user_prefs.prefer_diversification:
+                context += "- 분산 투자 선호\n"
+
+            if user_prefs.prefer_dip_buying:
+                context += "- 하락장 매수 선호 (저점 매수)\n"
+
+            if user_prefs.prefer_momentum:
+                context += "- 모멘텀 투자 선호 (상승 추세 종목)\n"
+
+            # Custom instructions
+            if user_prefs.custom_instructions:
+                context += f"\n### 추가 투자 지침:\n{user_prefs.custom_instructions}\n"
+
+            context += "\n**중요**: 위 사용자 선호도를 최대한 반영하여 추천을 생성하세요.\n"
 
         context += f"""
 

@@ -174,6 +174,19 @@
     </form>
 </div>
 
+<!-- 투자 선호도 (챗봇에서 자동 수집) -->
+<div class="card">
+    <h2>🎯 투자 선호도</h2>
+    <p style="color: #666; margin-bottom: 1.5rem;">
+        💬 챗봇과 대화하면 자동으로 투자 선호도가 저장됩니다.<br>
+        예: "기술주 좋아해", "AAPL 관심있어", "보수적으로 투자하고 싶어"
+    </p>
+
+    <div id="investmentPreferences">
+        <p style="text-align: center; color: #666;">로딩 중...</p>
+    </div>
+</div>
+
 <!-- 시스템 정보 -->
 <div class="card">
     <h2>ℹ️ 시스템 정보</h2>
@@ -213,5 +226,98 @@
             }
         });
     });
+
+    // Load investment preferences
+    async function loadPreferences() {
+        try {
+            const response = await fetch('/api/preferences/investment');
+            const data = await response.json();
+
+            const container = document.getElementById('investmentPreferences');
+
+            if (!data.exists) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 2rem; background: #f8f9fa; border-radius: 4px;">
+                        <p style="color: #666; margin: 0;">${data.message || '아직 투자 선호도가 설정되지 않았습니다.'}</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const prefs = data.preferences;
+
+            const riskMap = {
+                'conservative': '보수적 (안전한 투자 선호)',
+                'moderate': '중립적 (균형 잡힌 투자)',
+                'aggressive': '공격적 (고위험 고수익 추구)'
+            };
+
+            const styleMap = {
+                'growth': '성장주 선호',
+                'value': '가치주 선호',
+                'dividend': '배당주 선호',
+                'balanced': '균형 잡힌 포트폴리오'
+            };
+
+            let html = '<table><tbody>';
+
+            html += `<tr><td><strong>위험 성향</strong></td><td>${riskMap[prefs.risk_appetite] || prefs.risk_appetite}</td></tr>`;
+            html += `<tr><td><strong>투자 스타일</strong></td><td>${styleMap[prefs.investment_style] || prefs.investment_style}</td></tr>`;
+
+            if (prefs.preferred_sectors && prefs.preferred_sectors.length > 0) {
+                html += `<tr><td><strong>선호 섹터</strong></td><td>${prefs.preferred_sectors.join(', ')}</td></tr>`;
+            }
+
+            if (prefs.avoided_sectors && prefs.avoided_sectors.length > 0) {
+                html += `<tr><td><strong>회피 섹터</strong></td><td>${prefs.avoided_sectors.join(', ')}</td></tr>`;
+            }
+
+            if (prefs.preferred_tickers && prefs.preferred_tickers.length > 0) {
+                html += `<tr><td><strong>선호 종목</strong></td><td>${prefs.preferred_tickers.join(', ')}</td></tr>`;
+            }
+
+            if (prefs.avoided_tickers && prefs.avoided_tickers.length > 0) {
+                html += `<tr><td><strong>회피 종목</strong></td><td>${prefs.avoided_tickers.join(', ')}</td></tr>`;
+            }
+
+            const strategies = [];
+            if (prefs.prefer_diversification) strategies.push('분산 투자');
+            if (prefs.prefer_dip_buying) strategies.push('저점 매수');
+            if (prefs.prefer_momentum) strategies.push('모멘텀 투자');
+
+            if (strategies.length > 0) {
+                html += `<tr><td><strong>투자 전략</strong></td><td>${strategies.join(', ')}</td></tr>`;
+            }
+
+            if (prefs.last_updated) {
+                const date = new Date(prefs.last_updated);
+                html += `<tr><td><strong>마지막 업데이트</strong></td><td>${date.toLocaleString('ko-KR')}</td></tr>`;
+            }
+
+            html += '</tbody></table>';
+
+            if (prefs.custom_instructions) {
+                html += `
+                    <div style="margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 4px;">
+                        <strong>추가 지침:</strong><br>
+                        <pre style="white-space: pre-wrap; margin: 0.5rem 0 0 0; font-family: inherit; font-size: 0.9rem;">${prefs.custom_instructions}</pre>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+
+        } catch (error) {
+            console.error('Failed to load preferences:', error);
+            document.getElementById('investmentPreferences').innerHTML = `
+                <div style="text-align: center; padding: 2rem; color: #dc3545;">
+                    <p>선호도를 불러오는데 실패했습니다.</p>
+                </div>
+            `;
+        }
+    }
+
+    // Load on page load
+    loadPreferences();
 </script>
 {% endblock %}

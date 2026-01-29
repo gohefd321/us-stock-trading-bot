@@ -20,6 +20,125 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api")
 
 
+async def _extract_and_save_preferences(user_message: str, ai_response: str, db: AsyncSession):
+    """
+    Extract investment preferences from chat conversation and save to database
+    """
+    try:
+        from ..models import InvestmentPreference
+        from sqlalchemy import select
+        from datetime import datetime
+
+        # Keywords to detect preference changes
+        user_lower = user_message.lower()
+
+        # Get or create preference record
+        stmt = select(InvestmentPreference).limit(1)
+        result = await db.execute(stmt)
+        prefs = result.scalar_one_or_none()
+
+        if not prefs:
+            prefs = InvestmentPreference()
+            db.add(prefs)
+
+        changed = False
+
+        # Extract risk appetite
+        if any(word in user_lower for word in ['안전', '보수적', '위험 회피', 'conservative', 'safe']):
+            prefs.risk_appetite = 'conservative'
+            changed = True
+        elif any(word in user_lower for word in ['공격적', '고위험', 'aggressive', 'high risk']):
+            prefs.risk_appetite = 'aggressive'
+            changed = True
+        elif any(word in user_lower for word in ['중립', '보통', 'moderate', 'balanced']):
+            prefs.risk_appetite = 'moderate'
+            changed = True
+
+        # Extract investment style
+        if any(word in user_lower for word in ['성장주', 'growth', '그로스']):
+            prefs.investment_style = 'growth'
+            changed = True
+        elif any(word in user_lower for word in ['가치주', 'value', '밸류']):
+            prefs.investment_style = 'value'
+            changed = True
+        elif any(word in user_lower for word in ['배당주', 'dividend']):
+            prefs.investment_style = 'dividend'
+            changed = True
+
+        # Extract sector preferences
+        sector_map = {
+            '기술주': 'technology', '테크': 'technology', 'tech': 'technology',
+            '헬스케어': 'healthcare', '의료': 'healthcare', '제약': 'healthcare',
+            '금융': 'finance', 'bank': 'finance',
+            '에너지': 'energy',
+            '소비재': 'consumer', '리테일': 'consumer'
+        }
+
+        for keyword, sector in sector_map.items():
+            if keyword in user_lower:
+                if '싫어' in user_lower or '피하' in user_lower or 'avoid' in user_lower:
+                    # Add to avoided sectors
+                    avoided = set(prefs.avoided_sectors.split(',')) if prefs.avoided_sectors else set()
+                    avoided.add(sector)
+                    prefs.avoided_sectors = ','.join(filter(None, avoided))
+                    changed = True
+                elif '좋아' in user_lower or '관심' in user_lower or 'prefer' in user_lower or 'like' in user_lower:
+                    # Add to preferred sectors
+                    preferred = set(prefs.preferred_sectors.split(',')) if prefs.preferred_sectors else set()
+                    preferred.add(sector)
+                    prefs.preferred_sectors = ','.join(filter(None, preferred))
+                    changed = True
+
+        # Extract ticker preferences (simple pattern matching)
+        import re
+        ticker_pattern = r'\b([A-Z]{1,5})\b'
+        tickers = re.findall(ticker_pattern, user_message)
+
+        for ticker in tickers:
+            if len(ticker) >= 2 and len(ticker) <= 5:  # Valid ticker length
+                if '싫어' in user_lower or '피하' in user_lower or 'avoid' in user_lower:
+                    avoided_tickers = set(prefs.avoided_tickers.split(',')) if prefs.avoided_tickers else set()
+                    avoided_tickers.add(ticker)
+                    prefs.avoided_tickers = ','.join(filter(None, avoided_tickers))
+                    changed = True
+                elif '좋아' in user_lower or '추천' in user_lower or 'buy' in user_lower or 'prefer' in user_lower:
+                    preferred_tickers = set(prefs.preferred_tickers.split(',')) if prefs.preferred_tickers else set()
+                    preferred_tickers.add(ticker)
+                    prefs.preferred_tickers = ','.join(filter(None, preferred_tickers))
+                    changed = True
+
+        # Extract trading strategy preferences
+        if '분산' in user_lower or 'diversif' in user_lower:
+            prefs.prefer_diversification = True
+            changed = True
+
+        if '하락' in user_lower and ('매수' in user_lower or 'buy' in user_lower):
+            prefs.prefer_dip_buying = True
+            changed = True
+
+        if '모멘텀' in user_lower or 'momentum' in user_lower:
+            prefs.prefer_momentum = True
+            changed = True
+
+        # Save custom instructions
+        if '조건' in user_lower or '전략' in user_lower or 'strategy' in user_lower:
+            if prefs.custom_instructions:
+                prefs.custom_instructions += f"\n[{datetime.now().strftime('%Y-%m-%d')}] {user_message}"
+            else:
+                prefs.custom_instructions = f"[{datetime.now().strftime('%Y-%m-%d')}] {user_message}"
+            changed = True
+
+        if changed:
+            prefs.last_updated_by_chat = datetime.now()
+            await db.commit()
+            logger.info(f"[CHAT] 💾 Investment preferences updated from conversation")
+
+    except Exception as e:
+        logger.error(f"[CHAT] Failed to extract preferences: {e}")
+        # Don't fail the chat if preference extraction fails
+        pass
+
+
 class ChatRequest(BaseModel):
     message: str
 
@@ -166,6 +285,11 @@ async def chat_endpoint(
 
         response_length = len(response.text)
         logger.info(f"[CHAT] 📤 Response generated ({response_length} chars)")
+
+        # Extract and save investment preferences from conversation
+        db = services['db']
+        await _extract_and_save_preferences(request.message, response.text, db)
+
         logger.info(f"[CHAT] ✅ Chat request completed successfully")
 
         return ChatResponse(response=response.text)

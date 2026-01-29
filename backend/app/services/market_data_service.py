@@ -24,6 +24,8 @@ class MarketDataService:
         self.cache = {}
         self.cache_expiry = {}
         self.cache_duration = timedelta(minutes=30)  # Cache for 30 minutes
+        self.last_yahoo_call = {}  # Track last Yahoo API call time per ticker
+        self.yahoo_min_interval = 2.0  # Minimum 2 seconds between Yahoo calls
 
     def _is_cache_valid(self, key: str) -> bool:
         """Check if cached data is still valid"""
@@ -435,35 +437,56 @@ class MarketDataService:
 
     async def get_yahoo_stock_info(self, ticker: str) -> Optional[Dict]:
         """
-        Get stock info from Yahoo Finance
+        Get stock info from Yahoo Finance with rate limiting
 
         Returns:
             Dict with price, volume, news, etc.
         """
         cache_key = f"yahoo_{ticker}"
         if self._is_cache_valid(cache_key):
-            logger.info(f"[MARKET] 📦 Using cached Yahoo data for {ticker}")
+            logger.debug(f"[MARKET] 📦 Using cached Yahoo data for {ticker}")
             return self.cache[cache_key]
+
+        # Rate limiting: wait if called too recently
+        if ticker in self.last_yahoo_call:
+            elapsed = (datetime.now() - self.last_yahoo_call[ticker]).total_seconds()
+            if elapsed < self.yahoo_min_interval:
+                wait_time = self.yahoo_min_interval - elapsed
+                logger.debug(f"[MARKET] ⏱️ Rate limit: waiting {wait_time:.1f}s for {ticker}")
+                await asyncio.sleep(wait_time)
+
+        self.last_yahoo_call[ticker] = datetime.now()
 
         logger.info(f"[MARKET] 📈 Fetching Yahoo Finance data for {ticker}...")
 
         try:
-            stock = yf.Ticker(ticker)
-            info = stock.info
+            # Run in thread pool to avoid blocking
+            loop = asyncio.get_event_loop()
+            stock = await loop.run_in_executor(None, yf.Ticker, ticker)
+            info = await loop.run_in_executor(None, lambda: stock.info)
 
-            # Get recent news
-            news = stock.news[:3] if hasattr(stock, 'news') and stock.news else []
+            # Get recent news (safely)
+            try:
+                news_data = await loop.run_in_executor(None, lambda: stock.news)
+                news = news_data[:3] if news_data else []
+            except:
+                news = []
+
+            # Safely extract data with fallbacks
+            if not info or len(info) == 0:
+                logger.warning(f"[MARKET] ⚠️ Empty info returned for {ticker}")
+                return None
 
             data = {
                 'ticker': ticker,
-                'current_price': info.get('currentPrice', info.get('regularMarketPrice', 0)),
-                'change_percent': info.get('regularMarketChangePercent', 0),
-                'volume': info.get('volume', 0),
-                'market_cap': info.get('marketCap', 0),
-                'pe_ratio': info.get('trailingPE', 0),
-                'forward_pe': info.get('forwardPE', 0),
-                'analyst_rating': info.get('recommendationKey', 'N/A'),
-                'target_price': info.get('targetMeanPrice', 0),
+                'current_price': info.get('currentPrice') or info.get('regularMarketPrice') or 0,
+                'change_percent': info.get('regularMarketChangePercent') or 0,
+                'volume': info.get('volume') or 0,
+                'market_cap': info.get('marketCap') or 0,
+                'pe_ratio': info.get('trailingPE') or 0,
+                'forward_pe': info.get('forwardPE') or 0,
+                'analyst_rating': info.get('recommendationKey') or 'N/A',
+                'target_price': info.get('targetMeanPrice') or 0,
                 'news': [
                     {
                         'title': n.get('title', ''),
@@ -471,17 +494,126 @@ class MarketDataService:
                         'link': n.get('link', '')
                     }
                     for n in news
-                ]
+                ] if news else []
             }
 
-            logger.info(f"[MARKET] ✅ Yahoo data for {ticker}: ${data['current_price']:.2f}")
+            if data['current_price'] > 0:
+                logger.info(f"[MARKET] ✅ Yahoo data for {ticker}: ${data['current_price']:.2f}")
+            else:
+                logger.warning(f"[MARKET] ⚠️ No price data for {ticker}")
 
             self._set_cache(cache_key, data)
             return data
 
         except Exception as e:
             logger.error(f"[MARKET] 💥 Failed to fetch Yahoo data for {ticker}: {e}")
+            # Don't retry immediately - return None and cache will prevent rapid retries
             return None
+
+    async def get_market_movers(self) -> Dict:
+        """
+        Get market movers: volume leaders, gainers, and losers
+
+        Returns:
+            Dict with {
+                'volume_leaders': [...],
+                'gainers': [...],
+                'losers': [...]
+            }
+        """
+        cache_key = "market_movers"
+        if self._is_cache_valid(cache_key):
+            logger.info("[MARKET] 📦 Using cached market movers")
+            return self.cache[cache_key]
+
+        logger.info("[MARKET] 📊 Fetching market movers (volume/gainers/losers)...")
+
+        try:
+            import yfinance as yf
+
+            # Get S&P 500 components for analysis
+            sp500_url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(sp500_url) as response:
+                    html = await response.text()
+
+            soup = BeautifulSoup(html, 'html.parser')
+            table = soup.find('table', {'id': 'constituents'})
+
+            tickers = []
+            if table:
+                rows = table.find_all('tr')[1:51]  # Top 50 companies
+                for row in rows:
+                    cols = row.find_all('td')
+                    if len(cols) > 0:
+                        ticker = cols[0].text.strip()
+                        tickers.append(ticker)
+
+            # Fetch data for tickers (in parallel with rate limiting)
+            stocks_data = []
+
+            for i, ticker in enumerate(tickers):
+                try:
+                    # Rate limit: max 1 request per second
+                    if i > 0:
+                        await asyncio.sleep(1.0)
+
+                    loop = asyncio.get_event_loop()
+                    stock = await loop.run_in_executor(None, yf.Ticker, ticker)
+                    info = await loop.run_in_executor(None, lambda: stock.info)
+
+                    if info and len(info) > 0:
+                        stocks_data.append({
+                            'ticker': ticker,
+                            'price': info.get('regularMarketPrice') or info.get('currentPrice') or 0,
+                            'change_percent': info.get('regularMarketChangePercent') or 0,
+                            'volume': info.get('volume') or 0,
+                            'avg_volume': info.get('averageVolume') or 1,
+                            'market_cap': info.get('marketCap') or 0
+                        })
+                except Exception as e:
+                    logger.debug(f"[MARKET] Failed to fetch {ticker}: {e}")
+                    continue
+
+            # Sort by different criteria
+            volume_leaders = sorted(
+                [s for s in stocks_data if s['volume'] > 0],
+                key=lambda x: x['volume'],
+                reverse=True
+            )[:10]
+
+            gainers = sorted(
+                [s for s in stocks_data if s['change_percent'] > 0],
+                key=lambda x: x['change_percent'],
+                reverse=True
+            )[:10]
+
+            losers = sorted(
+                [s for s in stocks_data if s['change_percent'] < 0],
+                key=lambda x: x['change_percent']
+            )[:10]
+
+            result = {
+                'volume_leaders': volume_leaders,
+                'gainers': gainers,
+                'losers': losers,
+                'timestamp': datetime.now().isoformat()
+            }
+
+            logger.info(f"[MARKET] ✅ Market movers: {len(volume_leaders)} volume leaders, {len(gainers)} gainers, {len(losers)} losers")
+
+            self._set_cache(cache_key, result)
+            return result
+
+        except Exception as e:
+            logger.error(f"[MARKET] 💥 Failed to fetch market movers: {e}")
+            return {
+                'volume_leaders': [],
+                'gainers': [],
+                'losers': [],
+                'error': str(e)
+            }
 
     async def get_tipranks_info(self, ticker: str) -> Optional[Dict]:
         """
@@ -550,30 +682,38 @@ class MarketDataService:
             # Get trending stocks from all sources
             multi_source_stocks = await self.get_multi_source_trending_stocks(limit=10)
 
-            # Get detailed info for top trending stocks
+            # Get market movers (volume leaders, gainers, losers)
+            market_movers = await self.get_market_movers()
+
+            # Get detailed info for top trending stocks (limit to 3 to avoid rate limits)
             detailed_stocks = []
-            for stock_data in multi_source_stocks[:5]:  # Top 5 only to avoid rate limits
+            for stock_data in multi_source_stocks[:3]:  # Top 3 only to avoid rate limits
                 ticker = stock_data['ticker']
 
-                # Get Yahoo Finance data
-                yahoo_data = await self.get_yahoo_stock_info(ticker)
+                # Get Yahoo Finance data with better error handling
+                try:
+                    yahoo_data = await self.get_yahoo_stock_info(ticker)
 
-                if yahoo_data:
-                    combined_data = {
-                        **stock_data,
-                        **yahoo_data
-                    }
-                    detailed_stocks.append(combined_data)
+                    if yahoo_data:
+                        combined_data = {
+                            **stock_data,
+                            **yahoo_data
+                        }
+                        detailed_stocks.append(combined_data)
+                except Exception as e:
+                    logger.warning(f"[MARKET] ⚠️ Skipping {ticker} due to error: {e}")
+                    continue
 
-                # Rate limiting
-                await asyncio.sleep(0.5)
+                # Rate limiting between calls
+                await asyncio.sleep(2.0)
 
             summary = {
                 'timestamp': datetime.now().isoformat(),
                 'multi_source_trending': multi_source_stocks,
                 'wsb_trending': multi_source_stocks,  # Backward compatibility
                 'detailed_stocks': detailed_stocks,
-                'summary_text': self._generate_summary_text_multi(multi_source_stocks, detailed_stocks)
+                'market_movers': market_movers,
+                'summary_text': self._generate_summary_text_multi(multi_source_stocks, detailed_stocks, market_movers)
             }
 
             logger.info(f"[MARKET] ✅ Market summary generated with {len(detailed_stocks)} detailed stocks from multiple sources")
@@ -589,7 +729,7 @@ class MarketDataService:
                 'summary_text': '시장 데이터를 가져오지 못했습니다.'
             }
 
-    def _generate_summary_text_multi(self, multi_source_stocks: List[Dict], detailed_stocks: List[Dict]) -> str:
+    def _generate_summary_text_multi(self, multi_source_stocks: List[Dict], detailed_stocks: List[Dict], market_movers: Dict = None) -> str:
         """Generate human-readable summary text from multiple sources"""
 
         if not multi_source_stocks:
@@ -597,8 +737,38 @@ class MarketDataService:
 
         summary = "**📊 현재 시장 동향 (다중 소스 통합)**\n\n"
 
+        # Market movers
+        if market_movers:
+            # Volume leaders
+            if market_movers.get('volume_leaders'):
+                summary += "💰 거래대금 상위 종목:\n"
+                for i, stock in enumerate(market_movers['volume_leaders'][:5], 1):
+                    volume_str = f"{stock['volume']:,.0f}" if stock['volume'] > 0 else "N/A"
+                    change = stock.get('change_percent', 0)
+                    change_str = f"+{change:.2f}%" if change >= 0 else f"{change:.2f}%"
+                    summary += f"{i}. ${stock['ticker']} - 거래량: {volume_str} ({change_str})\n"
+                summary += "\n"
+
+            # Gainers
+            if market_movers.get('gainers'):
+                summary += "📈 급등 종목 (상승률 상위):\n"
+                for i, stock in enumerate(market_movers['gainers'][:5], 1):
+                    change = stock.get('change_percent', 0)
+                    price = stock.get('price', 0)
+                    summary += f"{i}. ${stock['ticker']} - +{change:.2f}% (${price:.2f})\n"
+                summary += "\n"
+
+            # Losers
+            if market_movers.get('losers'):
+                summary += "📉 급락 종목 (하락률 상위):\n"
+                for i, stock in enumerate(market_movers['losers'][:5], 1):
+                    change = stock.get('change_percent', 0)
+                    price = stock.get('price', 0)
+                    summary += f"{i}. ${stock['ticker']} - {change:.2f}% (${price:.2f})\n"
+                summary += "\n"
+
         # Multi-source trending
-        summary += "🔥 가장 많이 언급되는 종목 (통합):\n"
+        summary += "🔥 소셜미디어 트렌딩 종목:\n"
         for i, stock in enumerate(multi_source_stocks[:5], 1):
             sources_str = ", ".join(stock.get('sources', {}).keys())
             total_mentions = stock.get('total_mentions', 0)

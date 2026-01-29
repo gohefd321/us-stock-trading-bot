@@ -9,6 +9,7 @@ from .signals import Signal
 from .portfolio_snapshots import PortfolioSnapshot
 from .user_preferences import UserPreference
 from .risk_parameters import RiskParameter
+from .investment_preferences import InvestmentPreference
 
 __all__ = [
     "APIKey",
@@ -18,4 +19,5 @@ __all__ = [
     "PortfolioSnapshot",
     "UserPreference",
     "RiskParameter",
+    "InvestmentPreference",
 ]

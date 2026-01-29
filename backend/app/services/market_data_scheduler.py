@@ -168,13 +168,17 @@ class MarketDataScheduler:
                     'positions': []
                 }
 
-            # Generate recommendations
-            logger.info(f"[SCHEDULER] 🤖 Generating AI recommendations for {market_phase}...")
-            recommendations = await self.recommendation_service.generate_trading_recommendations(
-                portfolio_state,
-                market_summary,
-                market_phase
-            )
+            # Get database session for user preferences
+            from ..database import AsyncSessionLocal
+            async with AsyncSessionLocal() as db:
+                # Generate recommendations with user preferences
+                logger.info(f"[SCHEDULER] 🤖 Generating AI recommendations for {market_phase}...")
+                recommendations = await self.recommendation_service.generate_trading_recommendations(
+                    portfolio_state,
+                    market_summary,
+                    market_phase,
+                    db
+                )
 
             # Store latest recommendation
             self.latest_recommendation = recommendations
