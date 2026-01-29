@@ -130,6 +130,70 @@ async def _extract_and_save_preferences(user_message: str, ai_response: str, db:
                 prefs.custom_instructions = f"[{datetime.now().strftime('%Y-%m-%d')}] {user_message}"
             changed = True
 
+        # Extract trading behavior preferences (NEW)
+        if any(word in user_lower for word in ['단타', '데이', 'day trading', '당일', '하루']):
+            prefs.prefer_day_trading = True
+            changed = True
+
+        if any(word in user_lower for word in ['스윙', 'swing', '며칠', '단기']):
+            prefs.prefer_swing_trading = True
+            changed = True
+
+        if any(word in user_lower for word in ['장기', 'long term', '장투', '오래', '보유', '몇년', '몇 년']):
+            prefs.prefer_long_term = True
+            changed = True
+
+        # Extract price range preferences (NEW)
+        price_mentions = re.findall(r'\$?\s*(\d+(?:\.\d+)?)\s*(?:달러|불|dollar|usd)', user_lower)
+        if price_mentions and any(word in user_lower for word in ['이하', '이내', '까지', '범위', '가격대']):
+            try:
+                max_price = float(price_mentions[0])
+                if max_price > 0 and max_price < 10000:  # Reasonable range
+                    prefs.max_stock_price = max_price
+                    changed = True
+            except:
+                pass
+
+        # Extract investment goals (NEW)
+        goal_map = {
+            '은퇴': '은퇴 자금',
+            'retirement': '은퇴 자금',
+            '단기 수익': '단기 수익',
+            'short term': '단기 수익',
+            '자산 증식': '자산 증식',
+            'wealth': '자산 증식',
+            '소득': '소득 창출',
+            'income': '소득 창출'
+        }
+        for keyword, goal in goal_map.items():
+            if keyword in user_lower:
+                prefs.investment_goal = goal
+                changed = True
+                break
+
+        # Extract target return expectations (NEW)
+        return_mentions = re.findall(r'(\d+)\s*%', user_message)
+        if return_mentions and any(word in user_lower for word in ['수익', 'return', '목표', 'target', '기대', '원해']):
+            try:
+                target = float(return_mentions[0])
+                if 1 <= target <= 200:  # Reasonable range
+                    prefs.target_annual_return_pct = target
+                    changed = True
+            except:
+                pass
+
+        # Extract loss tolerance (NEW)
+        if any(word in user_lower for word in ['손실', 'loss', '손해', '잃', '마이너스']):
+            loss_mentions = re.findall(r'(\d+)\s*%', user_message)
+            if loss_mentions:
+                try:
+                    max_loss = float(loss_mentions[0])
+                    if 1 <= max_loss <= 50:  # Reasonable range
+                        prefs.max_acceptable_loss_pct = max_loss
+                        changed = True
+                except:
+                    pass
+
         # Save any investment-related conversation to custom instructions
         if any(word in user_lower for word in ['투자', 'invest', '포트폴리오', '매수', '매도', 'buy', 'sell', '종목', 'stock']):
             if not prefs.custom_instructions or user_message not in prefs.custom_instructions:
@@ -236,43 +300,80 @@ async def chat_endpoint(
 
         # 컨텍스트 구성
         logger.info("[CHAT] 📝 Building context with portfolio and market data...")
+        cash_balance = portfolio_state.get('cash_balance', 0)
+        total_value = portfolio_state.get('total_value', 0)
+
         context = f"""
-당신은 미국 주식 투자 분석 전문가입니다. 사용자의 포트폴리오를 분석하고 투자 조언을 제공합니다.
+당신은 20년 경력의 전문 주식 트레이더이자 포트폴리오 매니저입니다.
+사용자의 계좌를 관리하며, 매수/매도 결정, 리스크 관리, 자산 배분에 대한 전문적인 조언을 제공합니다.
 
-현재 포트폴리오 상태:
-- 총 자산: ${portfolio_state.get('total_value', 0):.2f}
-- 현금 잔고: ${portfolio_state.get('cash_balance', 0):.2f}
-- 일일 손익: {portfolio_state.get('daily_pnl_pct', 0):.2f}%
-- 총 손익: {portfolio_state.get('total_pnl_pct', 0):.2f}%
-- 보유 포지션 수: {portfolio_state.get('position_count', 0)}개
+## 현재 계좌 상태:
+- **총 자산**: ${total_value:.2f}
+- **현금 잔고 (매수 가능 자금)**: ${cash_balance:.2f}
+- **일일 손익**: {portfolio_state.get('daily_pnl_pct', 0):.2f}%
+- **총 손익**: {portfolio_state.get('total_pnl_pct', 0):.2f}%
+- **보유 포지션 수**: {portfolio_state.get('position_count', 0)}개
 
-보유 종목:
+## 보유 종목:
 """
 
         # 사용자 투자 선호도 추가
         if user_prefs:
-            context += "\n\n사용자 투자 선호도 (반드시 고려해주세요):\n"
-            context += f"- 위험 성향: {user_prefs.risk_appetite}\n"
-            context += f"- 투자 스타일: {user_prefs.investment_style}\n"
+            context += "\n\n## 사용자 투자 선호도 (전문 트레이더로서 반드시 고려):\n"
 
+            # Risk and style
+            risk_map = {'conservative': '보수적 (안전 중시)', 'moderate': '중립적 (균형)', 'aggressive': '공격적 (고위험 고수익)'}
+            style_map = {'growth': '성장주', 'value': '가치주', 'dividend': '배당주', 'balanced': '균형'}
+            context += f"- **위험 성향**: {risk_map.get(user_prefs.risk_appetite, user_prefs.risk_appetite)}\n"
+            context += f"- **투자 스타일**: {style_map.get(user_prefs.investment_style, user_prefs.investment_style)}\n"
+
+            # Sectors
             if user_prefs.preferred_sectors:
-                context += f"- 선호 섹터: {user_prefs.preferred_sectors}\n"
+                context += f"- **선호 섹터**: {user_prefs.preferred_sectors}\n"
             if user_prefs.avoided_sectors:
-                context += f"- 회피 섹터: {user_prefs.avoided_sectors}\n"
+                context += f"- **회피 섹터**: {user_prefs.avoided_sectors}\n"
+
+            # Tickers
             if user_prefs.preferred_tickers:
-                context += f"- 관심 종목: {user_prefs.preferred_tickers}\n"
+                context += f"- **관심 종목**: {user_prefs.preferred_tickers}\n"
             if user_prefs.avoided_tickers:
-                context += f"- 투자 제외 종목: {user_prefs.avoided_tickers}\n"
+                context += f"- **투자 제외 종목**: {user_prefs.avoided_tickers}\n"
 
+            # Strategy preferences
             if user_prefs.prefer_diversification:
-                context += "- 분산투자 선호\n"
+                context += "- **전략**: 분산투자 선호\n"
             if user_prefs.prefer_dip_buying:
-                context += "- 하락장 매수 전략 선호\n"
+                context += "- **전략**: 하락장 매수 선호 (저점 매수)\n"
             if user_prefs.prefer_momentum:
-                context += "- 모멘텀 투자 전략 선호\n"
+                context += "- **전략**: 모멘텀 투자 선호 (상승 추세)\n"
 
+            # Trading behavior (NEW)
+            if hasattr(user_prefs, 'prefer_day_trading') and user_prefs.prefer_day_trading:
+                context += "- **매매 스타일**: 단타 (당일 매매)\n"
+            if hasattr(user_prefs, 'prefer_swing_trading') and user_prefs.prefer_swing_trading:
+                context += "- **매매 스타일**: 스윙 트레이딩 (수일~수주)\n"
+            if hasattr(user_prefs, 'prefer_long_term') and user_prefs.prefer_long_term:
+                context += "- **매매 스타일**: 장기 투자\n"
+
+            # Price range (NEW)
+            if hasattr(user_prefs, 'max_stock_price') and user_prefs.max_stock_price and user_prefs.max_stock_price > 0:
+                context += f"- **가격대 선호**: ${user_prefs.max_stock_price:.2f} 이하\n"
+
+            # Investment goal (NEW)
+            if hasattr(user_prefs, 'investment_goal') and user_prefs.investment_goal:
+                context += f"- **투자 목표**: {user_prefs.investment_goal}\n"
+
+            # Target return (NEW)
+            if hasattr(user_prefs, 'target_annual_return_pct') and user_prefs.target_annual_return_pct and user_prefs.target_annual_return_pct > 0:
+                context += f"- **목표 수익률**: 연 {user_prefs.target_annual_return_pct:.1f}%\n"
+
+            # Loss tolerance (NEW)
+            if hasattr(user_prefs, 'max_acceptable_loss_pct') and user_prefs.max_acceptable_loss_pct:
+                context += f"- **최대 허용 손실**: {user_prefs.max_acceptable_loss_pct:.1f}%\n"
+
+            # Custom instructions
             if user_prefs.custom_instructions:
-                context += f"\n사용자의 추가 투자 지침:\n{user_prefs.custom_instructions}\n"
+                context += f"\n**추가 투자 지침**:\n{user_prefs.custom_instructions}\n"
 
             context += "\n"
 
@@ -284,34 +385,56 @@ async def chat_endpoint(
         if positions:
             logger.info(f"[CHAT] 📈 Adding {len(positions)} positions to context")
             for pos in positions:
+                ticker = pos.get('ticker')
+                quantity = pos.get('quantity', 0)
+                avg_cost = pos.get('avg_cost', 0)
+                current_price = pos.get('current_price', 0)
+                pnl_pct = pos.get('unrealized_pnl_pct', 0)
+                position_value = quantity * current_price
+
                 context += f"""
-- {pos.get('ticker')}: {pos.get('quantity')}주
-  평단가: ${pos.get('avg_cost', 0):.2f}
-  현재가: ${pos.get('current_price', 0):.2f}
-  손익률: {pos.get('unrealized_pnl_pct', 0):.2f}%
+- **{ticker}**: {quantity}주
+  평단가: ${avg_cost:.2f} | 현재가: ${current_price:.2f}
+  포지션 가치: ${position_value:.2f} | 손익률: {pnl_pct:+.2f}%
 """
         else:
             logger.info("[CHAT] 📭 No positions to add")
-            context += "- 보유 중인 종목이 없습니다.\n"
+            context += "- 현재 보유 종목이 없습니다. 신규 투자 기회를 찾아주세요.\n"
 
         # 시장 데이터 추가
         context += f"\n\n{market_summary.get('summary_text', '')}\n"
 
         context += f"""
 
-사용자 질문: {request.message}
+## 사용자 질문: {request.message}
 
-위 포트폴리오 정보와 시장 동향을 참고하여 사용자의 질문에 답변해주세요.
-- Reddit WSB에서 트렌딩 중인 종목 정보를 활용하세요
-- Yahoo Finance의 실시간 가격 및 뉴스 정보를 참고하세요
-- 사용자가 특정 종목에 대해 물어보면 해당 종목의 현재 상황을 설명해주세요
-- **필요시 Google 검색을 적극 활용하여 최신 뉴스, 실적 발표, 산업 동향, 주가 전망 등을 조사해주세요**
-- 특정 기업, 섹터, 경제 지표에 대한 질문이 있다면 반드시 실시간 정보를 검색하여 제공해주세요
+## 전문 트레이더로서의 대응 방침:
 
-답변은 친절하고 이해하기 쉽게, 한국어로 작성해주세요.
-투자 조언을 할 때는 반드시 "이는 참고용이며 투자 결정은 본인의 책임입니다"라는 경고를 포함해주세요.
+### 🎯 핵심 원칙:
+1. **현금 잔고 고려**: 매수 추천 시 현재 현금 ${cash_balance:.2f}로 실제 구매 가능한 종목만 제안
+2. **현실적인 가격대**: 고가 종목(주가 $500 이상)은 현금이 충분하지 않으면 제외
+3. **매수와 매도 균형**: 보유 종목이 있으면 매도/보유 검토도 함께 제안
+4. **손절/익절 판단**: 보유 종목 중 -10% 이상 손실이나 +20% 이상 수익 달성 시 매도 고려
+5. **리스크 관리**: 한 종목에 과도한 집중 투자 지양, 분산투자 강조
 
-**중요: 사용자의 메시지에서 투자 선호도, 관심 종목, 투자 스타일 등의 힌트를 파악하여 답변에 반영하고, 이러한 정보는 자동으로 저장됩니다.**
+### 📊 정보 활용:
+- **Reddit WSB 트렌딩**: 단기 모멘텀 파악
+- **Yahoo Finance**: 실시간 가격 및 뉴스
+- **Google 검색**: 최신 뉴스, 실적 발표, 산업 동향, 주가 전망 등을 적극 조사
+- **사용자 선호도**: 위에 명시된 투자 선호도를 최우선으로 고려
+
+### 💬 답변 스타일:
+- 전문 트레이더답게 구체적이고 실전적인 조언 제공
+- 매수/매도 추천 시 명확한 근거와 함께 제시
+- 가격, 수량, 비중 등 구체적인 숫자 포함
+- 리스크와 기회를 균형있게 설명
+- 한국어로 친절하면서도 전문적으로 답변
+
+### ⚠️ 면책:
+답변 마지막에 반드시 "이는 참고용 분석이며, 최종 투자 결정은 본인의 책임입니다"를 포함하세요.
+
+### 📝 학습 기능:
+사용자의 메시지에서 투자 선호도, 관심 종목, 투자 스타일 등의 힌트를 파악하여 답변에 반영하고, 이러한 정보는 자동으로 저장됩니다.
 """
         logger.info(f"[CHAT] ✅ Context built ({len(context)} chars)")
 

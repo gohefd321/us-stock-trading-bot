@@ -35,6 +35,22 @@ class InvestmentPreference(Base):
     prefer_dip_buying = Column(Boolean, default=False, nullable=False)
     prefer_momentum = Column(Boolean, default=False, nullable=False)
 
+    # Trading behavior preferences (NEW)
+    prefer_day_trading = Column(Boolean, default=False, nullable=False)  # 단타 선호
+    prefer_swing_trading = Column(Boolean, default=False, nullable=False)  # 스윙 트레이딩
+    prefer_long_term = Column(Boolean, default=True, nullable=False)  # 장기 투자 선호
+
+    # Price range preferences (NEW)
+    min_stock_price = Column(Float, default=0.0, nullable=True)  # 최소 주가
+    max_stock_price = Column(Float, default=0.0, nullable=True)  # 최대 주가 (0 = 무제한)
+
+    # Investment goals (NEW)
+    target_annual_return_pct = Column(Float, default=0.0, nullable=True)  # 목표 수익률 (%)
+    investment_goal = Column(Text, default="", nullable=True)  # e.g., "은퇴 자금", "단기 수익", "자산 증식"
+
+    # Loss tolerance (NEW)
+    max_acceptable_loss_pct = Column(Float, default=20.0, nullable=False)  # 최대 허용 손실률
+
     # Additional instructions (free text from chat)
     custom_instructions = Column(Text, default="", nullable=True)
 
