@@ -25,6 +25,18 @@ from .routes.chat import router as chat_router
 from .routes.recommendations import router as recommendations_router
 from .routes.api_test import router as api_test_router
 from .routes.preferences import router as preferences_router
+from .routes.market_screener import router as market_screener_router
+from .routes.fundamentals import router as fundamentals_router
+from .routes.news import router as news_router
+from .routes.daily_report import router as daily_report_router
+from .routes.websocket_realtime import router as websocket_realtime_router
+from .routes.technical_indicators import router as technical_indicators_router
+from .routes.strategy_engine import router as strategy_engine_router
+from .routes.backtesting import router as backtesting_router
+from .routes.signal_generator import router as signal_generator_router
+from .routes.integrated_scheduler import router as integrated_scheduler_router
+from .routes.order_management import router as order_management_router
+from .routes.portfolio_optimizer import router as portfolio_optimizer_router
 
 # Setup logging
 setup_logging(settings.log_level)
@@ -63,6 +75,18 @@ app.include_router(settings_router)
 app.include_router(recommendations_router)  # AI recommendations routes
 app.include_router(api_test_router)  # API test routes
 app.include_router(preferences_router)  # Investment preferences routes
+app.include_router(market_screener_router)  # Market screener routes (Phase 1.1)
+app.include_router(fundamentals_router)  # Fundamental data routes (Phase 1.2)
+app.include_router(news_router)  # News & events routes (Phase 1.3)
+app.include_router(daily_report_router)  # Daily report routes (Phase 1.4)
+app.include_router(websocket_realtime_router)  # WebSocket realtime data (Phase 2.1)
+app.include_router(technical_indicators_router)  # Technical indicators (Phase 3.1)
+app.include_router(strategy_engine_router)  # Strategy engine (Phase 3.2)
+app.include_router(backtesting_router)  # Backtesting system (Phase 3.3)
+app.include_router(signal_generator_router)  # Signal generator (Phase 3.4)
+app.include_router(integrated_scheduler_router)  # Integrated scheduler (Phase 4.1)
+app.include_router(order_management_router)  # Order management (KIS order API)
+app.include_router(portfolio_optimizer_router)  # Portfolio optimization (MPT)
 
 
 async def token_refresh_loop():

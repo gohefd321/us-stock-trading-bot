@@ -46,3 +46,10 @@ httpx==0.28.1
 
 # KakaoTalk (Optional)
 requests-oauthlib==2.0.0
+
+# Phase 1: Data Collection & Analysis
+alpha-vantage==2.3.1  # Alpha Vantage API for fundamental data
+
+# Phase 3: Quant Trading Engine
+pandas-ta==0.4.71b0  # Technical indicators library
+scipy==1.13.0  # Statistical analysis
